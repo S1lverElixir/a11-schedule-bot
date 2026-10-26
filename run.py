@@ -9,7 +9,6 @@ if not os.path.exists('.git'):
     subprocess.run(['git', 'reset', '--hard', 'FETCH_HEAD'], check=True)
 
 # wheels в репозитории: pip в лимите 128 МБ падает по памяти при сетевой установке
-subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--no-index', '--no-deps',
-                '--find-links', 'wheels', '-r', 'requirements.txt'], check=True)
+subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--no-index', '--find-links', 'wheels', '-r', 'requirements.txt'], check=True)
 
 os.execv(sys.executable, [sys.executable, 'bot.py'])
