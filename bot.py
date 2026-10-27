@@ -254,8 +254,10 @@ async def handle_update(tg, update):
 
 async def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    timeout = aiohttp.ClientTimeout(total=40)  # long poll 25 c + запас на запрос
-    async with aiohttp.ClientSession(timeout=timeout) as http:
+    timeout = aiohttp.ClientTimeout(total=40)  # long poll 25 с + запас на запрос
+    # keep-alive соединение + кеш DNS на 5 минут: два главных источника экономии миллисекунд
+    conn = aiohttp.TCPConnector(ttl_dns_cache=300)
+    async with aiohttp.ClientSession(timeout=timeout, connector=conn) as http:
         tg = Telegram(BOT_TOKEN, http)
         try:  # на случай забытого webhook от прошлых экспериментов
             await tg.call("deleteWebhook")
@@ -265,7 +267,9 @@ async def main():
         offset = 0
         while True:
             try:
-                updates = await tg.call("getUpdates", timeout=25, offset=offset)
+                # только нужные типы апдейтов — меньше полезная нагрузка на каждый poll
+                updates = await tg.call("getUpdates", timeout=25, offset=offset,
+                                        allowed_updates=["message", "callback_query"])
             except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError) as e:
                 logging.warning("poll error: %s", e)
                 await asyncio.sleep(3)
