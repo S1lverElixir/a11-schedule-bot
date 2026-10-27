@@ -1,21 +1,17 @@
 # -*- coding: utf-8 -*-
-"""Личный бот расписания группы А-11 (БТЭУ). aiogram 3.x, только long polling."""
+"""Личный бот расписания группы А-11 (БТЭУ).
+
+Транспорт — чистый aiohttp + long polling: бесплатный хостинг даёт 128 МБ RAM,
+импорт aiogram (с pydantic) в этот лимит не помещается. Логика и форматы сообщений
+— строго по SPEC.md; вся предметная логика здесь та же, что была на aiogram.
+"""
 
 import asyncio
 import logging
 import os
 from datetime import date, datetime, timedelta, timezone
 
-from aiogram import Bot, Dispatcher, F
-from aiogram.filters import CommandStart
-from aiogram.types import (
-    CallbackQuery,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    KeyboardButton,
-    Message,
-    ReplyKeyboardMarkup,
-)
+import aiohttp
 from dotenv import load_dotenv
 
 from schedule_data import (
@@ -51,13 +47,10 @@ GREETING = "Расписание группы А-11. Кнопки ниже."
 
 
 def main_kb():
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text=BTN_TODAY), KeyboardButton(text=BTN_TOMORROW), KeyboardButton(text=BTN_WEEK)],
-            [KeyboardButton(text=BTN_BELLS), KeyboardButton(text=BTN_PICK)],
-        ],
-        resize_keyboard=True,
-    )
+    return {"keyboard": [
+        [{"text": BTN_TODAY}, {"text": BTN_TOMORROW}, {"text": BTN_WEEK}],
+        [{"text": BTN_BELLS}, {"text": BTN_PICK}],
+    ], "resize_keyboard": True}
 
 
 def hm(s):
@@ -151,10 +144,10 @@ def calendar_kb(y, m):
     head = []
     prev = first - timedelta(days=1)
     if month_intersects(prev.year, prev.month):
-        head.append(InlineKeyboardButton(text="‹", callback_data=f"cal:{prev:%Y-%m}"))
-    head.append(InlineKeyboardButton(text=f"{MONTHS[m - 1]} {y}", callback_data="cal:x"))
+        head.append({"text": "‹", "callback_data": f"cal:{prev:%Y-%m}"})
+    head.append({"text": f"{MONTHS[m - 1]} {y}", "callback_data": "cal:x"})
     if month_intersects(after.year, after.month):
-        head.append(InlineKeyboardButton(text="›", callback_data=f"cal:{after:%Y-%m}"))
+        head.append({"text": "›", "callback_data": f"cal:{after:%Y-%m}"})
 
     rows = [head]
     cell = first - timedelta(days=first.weekday())  # сетка с понедельника
@@ -163,58 +156,106 @@ def calendar_kb(y, m):
         for _ in range(7):
             # дни вне месяца или вне семестра — пустые неактивные клетки
             if cell.month == m and SEMESTER_START <= cell <= SEMESTER_END:
-                row.append(InlineKeyboardButton(
-                    text=str(cell.day), callback_data=f"cal:{cell:%Y-%m}:{cell.day:02d}"))
+                row.append({"text": str(cell.day), "callback_data": f"cal:{cell:%Y-%m}:{cell.day:02d}"})
             else:
-                row.append(InlineKeyboardButton(text=" ", callback_data="cal:x"))
+                row.append({"text": " ", "callback_data": "cal:x"})
             cell += timedelta(days=1)
         rows.append(row)
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+    return {"inline_keyboard": rows}
 
 
-async def cmd_start(msg: Message):
-    await msg.answer(GREETING, reply_markup=main_kb())
+class Telegram:
+    """Минимальный клиент Bot API поверх одной aiohttp-сессии."""
+
+    def __init__(self, token, http):
+        self._base = f"https://api.telegram.org/bot{token}"
+        self._http = http
+
+    async def call(self, method, **params):
+        async with self._http.post(f"{self._base}/{method}", json=params) as resp:
+            data = await resp.json()
+        if not data.get("ok"):
+            raise RuntimeError(f"{method}: {data.get('description')}")
+        return data["result"]
 
 
-async def on_reply(msg: Message):
-    today = datetime.now(TZ).date()
-    if msg.text == BTN_TODAY:
-        await msg.answer(day_text(today, " · сегодня"))
-    elif msg.text == BTN_TOMORROW:
-        await msg.answer(day_text(today + timedelta(days=1), " · завтра"))
-    elif msg.text == BTN_WEEK:
-        await msg.answer(week_text(today))
-    elif msg.text == BTN_BELLS:
-        await msg.answer(BELLS_TEXT)
-    else:  # BTN_PICK — сетка текущего месяца
-        await msg.answer("Выберите дату:", reply_markup=calendar_kb(today.year, today.month))
+async def send(tg, chat_id, text, reply_markup=None):
+    params = {"chat_id": chat_id, "text": text}
+    if reply_markup:
+        params["reply_markup"] = reply_markup
+    await tg.call("sendMessage", **params)
 
 
-async def on_calendar(call: CallbackQuery):
+async def on_callback(tg, cb):
     # cal:2026-10:23 — дата; cal:2026-10 — листание месяца; cal:x — неактивная клетка
-    parts = call.data.split(":")
+    parts = cb["data"].split(":")
+    await tg.call("answerCallbackQuery", callback_query_id=cb["id"])
     if parts[1] == "x":
-        await call.answer()
         return
     y, m = (int(v) for v in parts[1].split("-"))
+    chat_id = cb["message"]["chat"]["id"]
     if len(parts) == 3:
         # новое сообщение, календарь в чате остаётся
-        await call.message.answer(day_text(date(y, m, int(parts[2]))))
+        await send(tg, chat_id, day_text(date(y, m, int(parts[2]))))
     else:
-        await call.message.edit_reply_markup(reply_markup=calendar_kb(y, m))
-    await call.answer()
+        await tg.call("editMessageReplyMarkup", chat_id=chat_id,
+                      message_id=cb["message"]["message_id"], reply_markup=calendar_kb(y, m))
+
+
+async def on_message(tg, msg):
+    if msg.get("from", {}).get("id") != OWNER_ID:
+        return  # чужим — молчание
+    text = msg.get("text")
+    chat_id = msg["chat"]["id"]
+    if text == "/start":
+        await send(tg, chat_id, GREETING, main_kb())
+        return
+    if text not in BUTTONS:
+        return  # незнакомые тексты игнорируются молча
+    today = datetime.now(TZ).date()
+    if text == BTN_TODAY:
+        await send(tg, chat_id, day_text(today, " · сегодня"))
+    elif text == BTN_TOMORROW:
+        await send(tg, chat_id, day_text(today + timedelta(days=1), " · завтра"))
+    elif text == BTN_WEEK:
+        await send(tg, chat_id, week_text(today))
+    elif text == BTN_BELLS:
+        await send(tg, chat_id, BELLS_TEXT)
+    else:  # BTN_PICK — сетка текущего месяца
+        await send(tg, chat_id, "Выберите дату:", calendar_kb(today.year, today.month))
+
+
+async def handle_update(tg, update):
+    if "message" in update:
+        await on_message(tg, update["message"])
+    elif "callback_query" in update:
+        await on_callback(tg, update["callback_query"])
 
 
 async def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    bot = Bot(BOT_TOKEN)
-    dp = Dispatcher()
-    only_owner = F.from_user.id == OWNER_ID
-    dp.message.register(cmd_start, only_owner, CommandStart())
-    dp.message.register(on_reply, only_owner, F.text.in_(BUTTONS))
-    dp.callback_query.register(on_calendar, only_owner, F.data.startswith("cal:"))
-    # у сообщений от остальных и от прочих текстов нет обработчиков — бот молчит
-    await dp.start_polling(bot)
+    timeout = aiohttp.ClientTimeout(total=40)  # long poll 25 c + запас на запрос
+    async with aiohttp.ClientSession(timeout=timeout) as http:
+        tg = Telegram(BOT_TOKEN, http)
+        try:  # на случай забытого webhook от прошлых экспериментов
+            await tg.call("deleteWebhook")
+        except RuntimeError:
+            pass
+        logging.info("Start polling")
+        offset = 0
+        while True:
+            try:
+                updates = await tg.call("getUpdates", timeout=25, offset=offset)
+            except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError) as e:
+                logging.warning("poll error: %s", e)
+                await asyncio.sleep(3)
+                continue
+            for u in updates:
+                offset = u["update_id"] + 1
+                try:
+                    await handle_update(tg, u)
+                except Exception:
+                    logging.exception("update handling failed")
 
 
 if __name__ == "__main__":
