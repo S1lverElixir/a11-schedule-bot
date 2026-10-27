@@ -7,6 +7,7 @@
 """
 
 import asyncio
+import html
 import logging
 import os
 from datetime import date, datetime, timedelta, timezone
@@ -15,7 +16,7 @@ import aiohttp
 from dotenv import load_dotenv
 
 from schedule_data import (
-    BELLS_TEXT,
+    BELLS,
     SCHEDULE,
     SEMESTER_END,
     SEMESTER_START,
@@ -84,22 +85,24 @@ def status_line(pairs, now):
 
 
 def day_text(d, suffix=""):
-    """Сообщение одного дня. Суффикс « · сегодня»/« · завтра» — только для кнопок
-    «Сегодня»/«Завтра». Статус же (и строка «сегодня пар нет») привязан к самой
-    дате: выводится для сегодняшнего дня любым способом, включая тап в календаре."""
+    """Сообщение одного дня в HTML: шапка и номера пар жирным, статус курсивом.
+    Суффикс « · сегодня»/« · завтра» — только для кнопок «Сегодня»/«Завтра».
+    Статус (и строка «сегодня пар нет») привязан к самой дате: выводится для
+    сегодняшнего дня любым способом, включая тап в календаре."""
     now = datetime.now(TZ)
-    head = f"{WD_FULL[d.weekday()]}, {d:%d.%m.%Y}{suffix}\nНеделя {week_mark(d)} чертой"
+    head = (f"<b>{WD_FULL[d.weekday()]}, {d:%d.%m.%Y}{html.escape(suffix)}</b>\n"
+            f"Неделя {week_mark(d)} чертой")
     pairs = day_pairs(d)
     if not pairs:
         line = "сегодня пар нет" if d == now.date() else "пар нет"
-        return f"{head}\n\n{line}"
+        return f"{head}\n\n<i>{line}</i>"
     blocks = []
     for num, st, en, subj, rooms, teachers, _w in pairs:
-        second = f"{subj}, ауд. {rooms}" if rooms else subj
-        blocks.append(f"{num}-я пара {st}–{en}\n{second}\n{', '.join(teachers)}")
+        second = f"{html.escape(subj)}, ауд. {rooms}" if rooms else html.escape(subj)
+        blocks.append(f"<b>{num}-я пара {st}–{en}</b>\n{second}\n{html.escape(', '.join(teachers))}")
     text = head + "\n\n" + "\n\n".join(blocks)
     if d == now.date():
-        text += "\n\n" + status_line(pairs, now.hour * 60 + now.minute)
+        text += "\n\n<i>" + status_line(pairs, now.hour * 60 + now.minute) + "</i>"
     return text
 
 
@@ -133,6 +136,19 @@ def next_month_first(y, m):
     return date(y + 1, 1, 1) if m == 12 else date(y, m + 1, 1)
 
 
+def bells_text():
+    """«Звонки» в HTML: моношрифт-таблица с ровными колонками."""
+    lines = []
+    width = max(len(en) for _n, _s, en, _a, _b, _br in BELLS)
+    for num, st, en, _a, _b, br in BELLS:
+        tail = f"   перерыв {br}" if br else ""
+        lines.append(f"{num}-я  {st}–{en}{' ' * (width - len(en) + 1)}{tail}".rstrip())
+    body = "\n".join(lines)
+    return ("<b>Расписание звонков</b>\n"
+            f"<code>{body}</code>\n\n"
+            "<i>внутри каждой пары: 45 мин, перемена 5 мин</i>")
+
+
 def month_intersects(y, m):
     """Пересекается ли месяц с семестром — по этому признаку показываются стрелки."""
     return date(y, m, 1) <= SEMESTER_END and next_month_first(y, m) - timedelta(days=1) >= SEMESTER_START
@@ -149,14 +165,16 @@ def calendar_kb(y, m):
     if month_intersects(after.year, after.month):
         head.append({"text": "›", "callback_data": f"cal:{after:%Y-%m}"})
 
-    rows = [head]
+    rows = [head, [{"text": wd, "callback_data": "cal:x"} for wd in WD_SHORT]]
     cell = first - timedelta(days=first.weekday())  # сетка с понедельника
+    today = datetime.now(TZ).date()
     while cell < after:
         row = []
         for _ in range(7):
             # дни вне месяца или вне семестра — пустые неактивные клетки
             if cell.month == m and SEMESTER_START <= cell <= SEMESTER_END:
-                row.append({"text": str(cell.day), "callback_data": f"cal:{cell:%Y-%m}:{cell.day:02d}"})
+                mark = "·" if cell == today else ""
+                row.append({"text": f"{cell.day}{mark}", "callback_data": f"cal:{cell:%Y-%m}:{cell.day:02d}"})
             else:
                 row.append({"text": " ", "callback_data": "cal:x"})
             cell += timedelta(days=1)
@@ -179,10 +197,12 @@ class Telegram:
         return data["result"]
 
 
-async def send(tg, chat_id, text, reply_markup=None):
+async def send(tg, chat_id, text, reply_markup=None, parse_mode=None):
     params = {"chat_id": chat_id, "text": text}
     if reply_markup:
         params["reply_markup"] = reply_markup
+    if parse_mode:
+        params["parse_mode"] = parse_mode
     await tg.call("sendMessage", **params)
 
 
@@ -196,7 +216,7 @@ async def on_callback(tg, cb):
     chat_id = cb["message"]["chat"]["id"]
     if len(parts) == 3:
         # новое сообщение, календарь в чате остаётся
-        await send(tg, chat_id, day_text(date(y, m, int(parts[2]))))
+        await send(tg, chat_id, day_text(date(y, m, int(parts[2]))), parse_mode="HTML")
     else:
         await tg.call("editMessageReplyMarkup", chat_id=chat_id,
                       message_id=cb["message"]["message_id"], reply_markup=calendar_kb(y, m))
@@ -214,13 +234,13 @@ async def on_message(tg, msg):
         return  # незнакомые тексты игнорируются молча
     today = datetime.now(TZ).date()
     if text == BTN_TODAY:
-        await send(tg, chat_id, day_text(today, " · сегодня"))
+        await send(tg, chat_id, day_text(today, " · сегодня"), parse_mode="HTML")
     elif text == BTN_TOMORROW:
-        await send(tg, chat_id, day_text(today + timedelta(days=1), " · завтра"))
+        await send(tg, chat_id, day_text(today + timedelta(days=1), " · завтра"), parse_mode="HTML")
     elif text == BTN_WEEK:
         await send(tg, chat_id, week_text(today))
     elif text == BTN_BELLS:
-        await send(tg, chat_id, BELLS_TEXT)
+        await send(tg, chat_id, bells_text(), parse_mode="HTML")
     else:  # BTN_PICK — сетка текущего месяца
         await send(tg, chat_id, "Выберите дату:", calendar_kb(today.year, today.month))
 
