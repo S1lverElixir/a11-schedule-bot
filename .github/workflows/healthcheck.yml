@@ -3,6 +3,7 @@ name: healthcheck
 on:
   schedule:
     - cron: "17 * * * *"
+  workflow_dispatch:
 
 jobs:
   check:
@@ -13,8 +14,10 @@ jobs:
           TOKEN="${{ secrets.BOT_TOKEN }}"
           CHAT="${{ secrets.MY_TELEGRAM_ID }}"
           check() {
-            # живой polling-бот держит getUpdates => наш запрос получает 409
-            curl -s --max-time 30 "https://api.telegram.org/bot${TOKEN}/getUpdates?timeout=5" | grep -q "409"
+            # живой polling-бот держит getUpdates => наш запрос получает 409.
+            # Ищем именно '"error_code":409': подстрока «409» может случайно попасться
+            # в update_id или тексте очереди апдейтов, когда бот мёртв
+            curl -s --max-time 30 "https://api.telegram.org/bot${TOKEN}/getUpdates?timeout=5" | grep -q '"error_code":409'
           }
           if check || { sleep 60 && check; }; then
             echo "bot is polling: OK"
@@ -26,5 +29,6 @@ jobs:
             # попытка самопомощи: рестарт сервера через панель
             curl -sf --max-time 30 -X POST "https://panel.fps.ms/api/client/servers/1438731f/power" \
               -H "Authorization: Bearer ${{ secrets.FPSMS_API_KEY }}" \
+              -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36" \
               -H "Content-Type: application/json" -d '{"signal": "restart"}' > /dev/null || true
           fi

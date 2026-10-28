@@ -10,8 +10,12 @@ if not os.path.exists('.git'):
     subprocess.run(['git', 'fetch', '--depth', '1', 'origin', 'main'], check=True)
     subprocess.run(['git', 'reset', '--hard', 'FETCH_HEAD'], check=True)
 
-# wheels в репозитории: pip в лимите 128 МБ падает по памяти при сетевой установке
-subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--no-index', '--find-links', 'wheels', '-r', 'requirements.txt'], check=True)
+# wheels в репозитории: pip в лимите 128 МБ падает по памяти при сетевой установке.
+# Pip запускается только если пакетов ещё нет — экономит секунду и пик ~40 МБ на каждом рестарте
+try:
+    import aiohttp, dotenv  # noqa: F401
+except ImportError:
+    subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--no-index', '--find-links', 'wheels', '-r', 'requirements.txt'], check=True)
 print('WHEELS-OK, starting bot', flush=True)
 
 os.execv(sys.executable, [sys.executable, '-X', 'utf8', 'bot.py'])

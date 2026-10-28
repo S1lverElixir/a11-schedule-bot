@@ -74,8 +74,12 @@ def check_data():
                     (date(2026, 11, 2), "под"), (date(2026, 12, 21), "над"),
                     (date(2026, 12, 28), "под"), (date(2026, 10, 17), "над")):
         got = sd.week_mark(d)
-        (ok if got == want else fail)(
-            f"week_mark({d}) = {got} (официальная таблица: {want})")
+        if got == want:
+            ok(f"week_mark({d}) = {got} (официальная таблица: {want})")
+        else:
+            fail(f"week_mark({d}) = {got}, официальная таблица: {want} — "
+                 "если сменился семестр, обнови даты здесь по таблице bteu.by "
+                 "(«Формирование учебных недель») и в schedule_data.py")
 
     bells = {b[0]: (b[1], b[2]) for b in sd.BELLS}
     subjects = set()
@@ -102,9 +106,9 @@ def check_data():
                 fail(f"{tag}: нет преподавателей")
         seen = {}
         for p in pairs:
-            key = (p[0], p[3])
+            key = (p[0], p[6])  # номер пары + черта: две дисциплины на одном слоте одной недели — ошибка
             if key in seen:
-                fail(f"день {day}: дубль пары {key}")
+                fail(f"день {day}: дубль пары {key[0]}-я, недели «{key[1]}»")
             seen[key] = True
 
     missing = subjects - set(sd.KIND)
@@ -135,8 +139,12 @@ def check_renders(sd):
 
     today = date.today()
     emoji = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u2049\u203C]")
+    # суббота якорной недели = «под», суббота предыдущей = «над» — живёт при смене семестра,
+    # пока обновлён ANCHOR_MONDAY в schedule_data.py
+    under_sat = sd.ANCHOR_MONDAY + timedelta(days=5)
+    over_sat = sd.ANCHOR_MONDAY - timedelta(days=2)
     dates = [today, today + timedelta(days=1), sd.SEMESTER_START, sd.SEMESTER_END,
-             date(2026, 10, 17), date(2026, 10, 24), sd.SEMESTER_START - timedelta(days=2)]
+             over_sat, under_sat, sd.SEMESTER_START - timedelta(days=2)]
     texts = []
     for d in dates:
         texts.append((f"day_text({d})", bot.day_text(d, " · тест")))
@@ -250,7 +258,7 @@ def check_prod(env):
         warn("нет BOT_TOKEN в .env — прод-проверки пропущены")
         return
     alive = False
-    for _ in range(6):
+    for _ in range(3):
         try:
             urllib.request.urlopen(
                 f"https://api.telegram.org/bot{token}/getUpdates?timeout=25", timeout=33)
@@ -258,6 +266,9 @@ def check_prod(env):
             if e.code == 409:
                 alive = True
                 break
+            if e.code == 401:
+                fail("Telegram вернул 401: токен в .env невалиден (проверь BOT_TOKEN)")
+                return
         except Exception:
             pass
     if alive:
@@ -270,7 +281,7 @@ def check_deploy():
     section("ПРОД: автодеплой GitHub Actions")
     try:
         r = subprocess.run(
-            ["gh", "run", "list", "--limit", "1",
+            ["gh", "run", "list", "--workflow=deploy.yml", "--limit", "1",
              "--json", "displayTitle,conclusion,createdAt"],
             capture_output=True, text=True, timeout=30, cwd=ROOT)
         runs = json.loads(r.stdout or "[]")

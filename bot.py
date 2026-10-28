@@ -76,6 +76,11 @@ def day_pairs(d):
     return [e for e in SCHEDULE[d.weekday()] if e[6] in ("both", mark)]
 
 
+def fmt_minutes(m):
+    """Интервал по-человечески: 45 -> «45 мин», 95 -> «1 ч 35 мин»."""
+    return f"{m // 60} ч {m % 60} мин" if m >= 60 else f"{m} мин"
+
+
 def status_line(pairs, now):
     """Статус сегодняшнего дня; now — минуты от полуночи.
     Времена берутся из записей SCHEDULE в schedule_data.py (начало/конец пары — это
@@ -85,10 +90,10 @@ def status_line(pairs, now):
         s, e = hm(st), hm(en)
         if now < s:
             if i == 0:
-                return f"до первой пары {s - now} мин"
-            return f"перемена, до {num}-й пары {s - now} мин"
+                return f"до первой пары {fmt_minutes(s - now)}"
+            return f"перемена, до {num}-й пары {fmt_minutes(s - now)}"
         if now < e:
-            return f"идёт {num}-я пара, до конца {e - now} мин"
+            return f"идёт {num}-я пара, до конца {fmt_minutes(e - now)}"
     return "занятия окончены"
 
 
@@ -155,7 +160,7 @@ def day_text(d, suffix=""):
         blocks = [pair_block(e) for e in pairs]
     else:
         running = next((e for e in pairs if hm(e[1]) <= minutes < hm(e[2])), None)
-        blocks = [pair_block(e, f"до конца {hm(e[2]) - minutes} мин") if e is running else pair_block(e)
+        blocks = [pair_block(e, f"до конца {fmt_minutes(hm(e[2]) - minutes)}") if e is running else pair_block(e)
                   for e in pairs]
         text = head
     return text + "\n\n" + "\n\n".join(blocks)
@@ -177,7 +182,7 @@ def now_text():
                     + (f", ауд. {fmt_rooms(first[4])}" if first[4] else "")
                     if (nd - d).days == 1 else
                     f"ближайшая пара: {WD_FULL[nd.weekday()].lower()}, {nd:%d.%m}, "
-                    f"{first[0]}-я в {first[1]} — {html.escape(first[3])}"
+                    f"{first[0]}-я пара в {first[1]} — {html.escape(first[3])}"
                     + (f", ауд. {fmt_rooms(first[4])}" if first[4] else ""))
             text += f"\n\n<blockquote>{hint}</blockquote>"
     else:
@@ -187,7 +192,7 @@ def now_text():
             head += "\n" + day_span_block(pairs, minutes)
         if running is not None:
             i = pairs.index(running)
-            text = head + "\n\n" + pair_block(running) + f"\n<i>до конца {hm(running[2]) - minutes} мин</i>"
+            text = head + "\n\n" + pair_block(running) + f"\n<i>до конца {fmt_minutes(hm(running[2]) - minutes)}</i>"
             if i + 1 < len(pairs):
                 nxt = pairs[i + 1]
                 hint = (f"дальше: {nxt[0]}-я пара в {nxt[1]} — "
@@ -196,7 +201,7 @@ def now_text():
         elif upcoming is not None:
             gap = hm(upcoming[1]) - minutes
             label = "до первой пары" if upcoming is pairs[0] else "перемена"
-            text = head + f"\n\n<i>{label}, {gap} мин</i>\n\n" + pair_block(upcoming)
+            text = head + f"\n\n<i>{label} {fmt_minutes(gap)}</i>\n\n" + pair_block(upcoming)
         else:
             text = head + "\n\n<i>занятия окончены</i>"
             nxt = next_day_first_pair(d)
@@ -206,7 +211,7 @@ def now_text():
                         + (f", ауд. {fmt_rooms(first[4])}" if first[4] else "")
                         if (nd - d).days == 1 else
                         f"ближайшая пара: {WD_FULL[nd.weekday()].lower()}, {nd:%d.%m}, "
-                        f"{first[0]}-я в {first[1]} — {html.escape(first[3])}"
+                        f"{first[0]}-я пара в {first[1]} — {html.escape(first[3])}"
                         + (f", ауд. {fmt_rooms(first[4])}" if first[4] else ""))
                 text += f"\n\n<blockquote>{hint}</blockquote>"
     return text
@@ -323,18 +328,44 @@ def bells_text():
     for num, st, en, first, second, br in BELLS:
         tail = f"   перерыв {br}" if br else ""
         lines.append(f"{num}-я  {st}–{en}{' ' * (width - len(en))}{tail}".rstrip())
+        gap = hm(second.split("–")[0]) - hm(first.split("–")[1])
         lines.append(f"├ 1-й час  {first}")
-        lines.append("├ перемена 5 мин")
+        lines.append(f"├ перемена {gap} мин")
         lines.append(f"└ 2-й час  {second}")
     body = "\n".join(lines)
     return "<b>Расписание звонков</b>\n" + f"<code>{body}</code>"
 
 
+def ics_escape(s):
+    """RFC 5545: экранирование бэкслэша, точки с запятой, запятой и перевода строки."""
+    return (s.replace("\\", "\\\\").replace(";", "\\;")
+            .replace(",", "\\,").replace("\n", "\\n"))
+
+
+def ics_fold(line):
+    """Фолдинг по RFC 5545 §3.1: строки длиннее 75 октетов режутся на части,
+    продолжение — с CRLF и пробелом; многобайтовые символы UTF-8 не рвутся."""
+    data = line.encode("utf-8")
+    if len(data) <= 75:
+        return line
+    parts = []
+    limit = 75
+    while data:
+        cut = min(limit, len(data))
+        while cut < len(data) and 0x80 <= data[cut] <= 0xBF:
+            cut -= 1
+        parts.append(data[:cut].decode("utf-8"))
+        data = data[cut:]
+        limit = 74  # продолжение начинается с пробела, на него отводится 1 октет
+    return "\r\n ".join(parts)
+
+
 def ics_for_week(monday):
-    """ICS-файл недели: событие на каждую пару, время локальное плавающее."""
+    """ICS-файл недели: событие на каждую пару, время локальное плавающее.
+    DTSTAMP — по RFC обязательный UTC."""
     out = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//a11-schedule-bot//RU",
            "CALSCALE:GREGORIAN"]
-    stamp = datetime.now(TZ).strftime("%Y%m%dT%H%M%S")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     for i in range(7):
         day = monday + timedelta(days=i)
         for num, st, en, subj, rooms, teachers, _w in day_pairs(day):
@@ -345,12 +376,12 @@ def ics_for_week(monday):
                     f"DTSTAMP:{stamp}",
                     f"DTSTART:{day:%Y%m%d}T{t(st)}",
                     f"DTEND:{day:%Y%m%d}T{t(en)}",
-                    "SUMMARY:" + subj.replace(",", "\\,"),
-                    "LOCATION:" + (rooms or "").replace(",", "\\,"),
-                    "DESCRIPTION:" + ", ".join(teachers).replace(",", "\\,"),
+                    "SUMMARY:" + ics_escape(subj),
+                    "LOCATION:" + ics_escape(rooms or ""),
+                    "DESCRIPTION:" + ics_escape(", ".join(teachers)),
                     "END:VEVENT"]
     out.append("END:VCALENDAR")
-    return "\r\n".join(out).encode("utf-8")
+    return ("\r\n".join(ics_fold(line) for line in out) + "\r\n").encode("utf-8")
 
 
 def morning_text(d):
@@ -361,7 +392,10 @@ def morning_text(d):
         return f"{head}\n\n<i>сегодня пар нет</i>"
     now = datetime.now(TZ)
     mins = now.hour * 60 + now.minute
-    info = day_span_block(pairs, mins) + f"\n<i>до 1-й пары {hm(pairs[0][1]) - mins} мин</i>"
+    gap = hm(pairs[0][1]) - mins
+    info = day_span_block(pairs, mins)
+    if gap > 0:  # до первой пары; если сводка пришла позже старта — строка отсчёта не нужна
+        info += f"\n<i>до первой пары {fmt_minutes(gap)}</i>"
     lines = []
     for num, st, _en, subj, rooms, _t, _w in pairs:
         title = (f"{KIND.get(subj, '')} · {html.escape(subj)}" if KIND.get(subj)
@@ -388,8 +422,7 @@ class Telegram:
         form = aiohttp.FormData()
         form.add_field("chat_id", str(chat_id))
         if caption:
-            form.add_field("caption", caption, content_type="text/plain; charset=utf-8",
-                           **{"Content-Type": None})
+            form.add_field("caption", caption)
             form.add_field("parse_mode", "HTML")
         form.add_field("document", content, filename=filename,
                        content_type="text/calendar")
@@ -411,29 +444,36 @@ async def send(tg, chat_id, text, reply_markup=None, parse_mode=None):
 async def on_callback(tg, cb):
     # cal:2026-10:23 — дата; cal:2026-10 — листание месяца; cal:x — неактивная клетка;
     # wk:2026-11-02 — неделя от понедельника; ics:2026-11-02 — экспорт недели
-    parts = cb["data"].split(":")
+    if cb.get("from", {}).get("id") != OWNER_ID:
+        return  # чужим — молчание; кнопки существуют только в личке владельца
     await tg.call("answerCallbackQuery", callback_query_id=cb["id"])
-    if parts[1] == "x":
-        return
-    chat_id = cb["message"]["chat"]["id"]
-    if parts[0] == "cal":
-        y, m = (int(v) for v in parts[1].split("-"))
-        if len(parts) == 3:
-            # новое сообщение, календарь в чате остаётся
-            await send(tg, chat_id, day_text(date(y, m, int(parts[2]))), parse_mode="HTML")
-        else:
-            await tg.call("editMessageReplyMarkup", chat_id=chat_id,
-                          message_id=cb["message"]["message_id"], reply_markup=calendar_kb(y, m))
-    elif parts[0] == "wk":
-        y, m, d = (int(v) for v in parts[1].split("-"))
-        monday = date(y, m, d)
-        await send(tg, chat_id, render_week(monday), reply_markup=week_kb(monday), parse_mode="HTML")
-    elif parts[0] == "ics":
-        y, m, d = (int(v) for v in parts[1].split("-"))
-        monday = date(y, m, d)
-        name = f"raspisanie_{monday:%d.%m}-{monday + timedelta(days=6):%d.%m}.ics"
-        await tg.send_document(chat_id, name, ics_for_week(monday),
-                               caption=f"<b>Неделя {monday:%d.%m}–{monday + timedelta(days=6):%d.%m} · {week_mark(monday)} чертой</b>")
+    try:
+        parts = cb["data"].split(":")
+        if parts[1] == "x":
+            return
+        # Telegram не присылает поле message у очень старых сообщений (календарь
+        # живёт в чате вечно) — чат владельца в личке совпадает с его id
+        chat_id = cb.get("message", {}).get("chat", {}).get("id") or OWNER_ID
+        if parts[0] == "cal":
+            y, m = (int(v) for v in parts[1].split("-"))
+            if len(parts) == 3:
+                # новое сообщение, календарь в чате остаётся
+                await send(tg, chat_id, day_text(date(y, m, int(parts[2]))), parse_mode="HTML")
+            else:
+                await tg.call("editMessageReplyMarkup", chat_id=chat_id,
+                              message_id=cb["message"]["message_id"], reply_markup=calendar_kb(y, m))
+        elif parts[0] == "wk":
+            y, m, d = (int(v) for v in parts[1].split("-"))
+            monday = date(y, m, d)
+            await send(tg, chat_id, render_week(monday), reply_markup=week_kb(monday), parse_mode="HTML")
+        elif parts[0] == "ics":
+            y, m, d = (int(v) for v in parts[1].split("-"))
+            monday = date(y, m, d)
+            name = f"raspisanie_{monday:%d.%m}-{monday + timedelta(days=6):%d.%m}.ics"
+            await tg.send_document(chat_id, name, ics_for_week(monday),
+                                   caption=f"<b>Неделя {monday:%d.%m}–{monday + timedelta(days=6):%d.%m} · {week_mark(monday)} чертой</b>")
+    except (KeyError, IndexError, ValueError):
+        logging.warning("bad callback data: %r", cb.get("data"))
 
 
 async def on_message(tg, msg):
@@ -520,16 +560,29 @@ async def morning_summary(http, tg):
         await asyncio.sleep(60)
 
 
+class _ScrubFormatter(logging.Formatter):
+    """Прячет BOT_TOKEN в логах: сетевые исключения aiohttp печатают URL,
+    в котором живёт токен, а консоль контейнера видна в панели."""
+
+    def format(self, record):
+        out = super().format(record)
+        return out.replace(BOT_TOKEN, "***") if BOT_TOKEN else out
+
+
 async def main():
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    handler = logging.StreamHandler()
+    handler.setFormatter(_ScrubFormatter("%(asctime)s %(levelname)s %(message)s"))
+    root.addHandler(handler)
     timeout = aiohttp.ClientTimeout(total=40)  # long poll 25 с + запас на запрос
     # keep-alive соединение + кеш DNS на 5 минут: два главных источника экономии миллисекунд
     conn = aiohttp.TCPConnector(ttl_dns_cache=300)
     async with aiohttp.ClientSession(timeout=timeout, connector=conn) as http:
         tg = Telegram(BOT_TOKEN, http)
-        try:  # на случай забытого webhook от прошлых экспериментов
+        try:  # на случай забытого webhook от прошлых экспериментов; сеть могла ещё не подняться
             await tg.call("deleteWebhook")
-        except RuntimeError:
+        except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError):
             pass
         logging.info("Start polling")
         asyncio.create_task(renewal_watchdog(http, tg))
@@ -540,7 +593,8 @@ async def main():
                 # только нужные типы апдейтов — меньше полезная нагрузка на каждый poll
                 updates = await tg.call("getUpdates", timeout=25, offset=offset,
                                         allowed_updates=["message", "callback_query"])
-            except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError) as e:
+            except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError, ValueError) as e:
+                # ValueError ловит и JSONDecodeError: кривой ответ не должен убивать цикл
                 logging.warning("poll error: %s", e)
                 await asyncio.sleep(3)
                 continue
