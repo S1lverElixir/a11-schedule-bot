@@ -98,8 +98,30 @@ def pair_block(entry):
     return (f"<b>{num}-я пара {st}–{en}</b>\n{second}\n{html.escape(', '.join(teachers))}")
 
 
+def day_span(pairs):
+    """(начало, конец) учебного дня в минутах — от первой до последней пары."""
+    return hm(pairs[0][1]), hm(pairs[-1][2])
+
+
+def progress_bar(pairs, minutes):
+    """10-клеточный прогресс учебного дня: ▰ пройдено, ▱ осталось."""
+    s, e = day_span(pairs)
+    filled = max(0, min(10, round((minutes - s) / (e - s) * 10)))
+    return "▰" * filled + "▱" * (10 - filled)
+
+
+def day_span_block(pairs, minutes_now=None):
+    """Строки <code>с прогрессом (только для сегодня) и диапазоном дня."""
+    s, e = day_span(pairs)
+    rng = f"{pairs[0][1]} — {pairs[-1][2]}"
+    if minutes_now is not None:
+        return f"<code>{progress_bar(pairs, minutes_now)}\n{rng}</code>"
+    return f"<code>{rng}</code>"
+
+
 def day_text(d, suffix=""):
-    """Сообщение одного дня в HTML: шапка и номера пар жирным, статус курсивом.
+    """Сообщение одного дня в HTML: шапка и номера пар жирным, статус курсивом,
+    для сегодняшнего дня — прогресс-бар и диапазон дня.
     Суффикс « · сегодня»/« · завтра» — только для кнопок «Сегодня»/«Завтра».
     Статус (и строка «сегодня пар нет») привязан к самой дате: выводится для
     сегодняшнего дня любым способом, включая тап в календаре."""
@@ -110,6 +132,10 @@ def day_text(d, suffix=""):
     if not pairs:
         line = "сегодня пар нет" if d == now.date() else "пар нет"
         return f"{head}\n\n<i>{line}</i>"
+    if d == now.date():
+        head += "\n" + day_span_block(pairs, now.hour * 60 + now.minute)
+    else:
+        head += "\n" + day_span_block(pairs)
     text = head + "\n\n" + "\n\n".join(pair_block(e) for e in pairs)
     if d == now.date():
         text += "\n\n<i>" + status_line(pairs, now.hour * 60 + now.minute) + "</i>"
@@ -133,6 +159,7 @@ def now_text():
                      f"\n\nближайшая пара: {WD_FULL[nd.weekday()].lower()}, {nd:%d.%m}, "
                      f"{first[0]}-я в {first[1]} — {html.escape(first[3])}")
     else:
+        head += "\n" + day_span_block(pairs, minutes)
         running = next((e for e in pairs if hm(e[1]) <= minutes < hm(e[2])), None)
         upcoming = next((e for e in pairs if minutes < hm(e[1])), None)
         if running is not None:
@@ -246,13 +273,15 @@ def calendar_kb(y, m):
 
 
 def bells_text():
-    """«Звонки» в HTML: моношрифт-таблица; у каждой пары — обе половины и перемена между ними."""
+    """«Звонки» в HTML: дерево — пара целиком, внутри 1-й час, перемена, 2-й час."""
     lines = []
     width = max(len(en) for _n, _s, en, _a, _b, _br in BELLS)
     for num, st, en, first, second, br in BELLS:
         tail = f"   перерыв {br}" if br else ""
         lines.append(f"{num}-я  {st}–{en}{' ' * (width - len(en) + 1)}{tail}".rstrip())
-        lines.append(f"     {first} · перемена 5 мин · {second}")
+        lines.append(f"├ 1-й час  {first}")
+        lines.append("├ перемена 5 мин")
+        lines.append(f"└ 2-й час  {second}")
     body = "\n".join(lines)
     return "<b>Расписание звонков</b>\n" + f"<code>{body}</code>"
 
