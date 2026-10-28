@@ -91,11 +91,17 @@ def status_line(pairs, now):
     return "занятия окончены"
 
 
-def pair_block(entry):
-    """HTML-блок пары: жирная строка времени, предмет с аудиторией, преподаватели."""
+def fmt_rooms(rooms):
+    """Аудитории для вывода: экранирование + пробел после запятой в перечнях."""
+    return html.escape(rooms).replace(",", ", ") if rooms else ""
+
+def pair_block(entry, note=None):
+    """HTML-блок пары: жирная строка времени, предмет с аудиторией, преподаватели;
+    note — курсивная приписка (для идущей пары)."""
     num, st, en, subj, rooms, teachers, _w = entry
-    second = f"{html.escape(subj)}, ауд. {rooms}" if rooms else html.escape(subj)
-    return (f"<b>{num}-я пара {st}–{en}</b>\n{second}\n{html.escape(', '.join(teachers))}")
+    second = f"{html.escape(subj)}, ауд. {fmt_rooms(rooms)}" if rooms else html.escape(subj)
+    text = f"<b>{num}-я пара {st}–{en}</b>\n{second}\n{html.escape(', '.join(teachers))}"
+    return text + (f"\n<i>{note}</i>" if note else "")
 
 
 def day_span(pairs):
@@ -111,12 +117,11 @@ def progress_bar(pairs, minutes):
 
 
 def day_span_block(pairs, minutes_now=None):
-    """Строки <code>с прогрессом (только для сегодня) и диапазоном дня."""
-    s, e = day_span(pairs)
-    rng = f"{pairs[0][1]} — {pairs[-1][2]}"
+    """Диапазон дня «пары HH:MM–HH:MM»; для сегодня — с прогресс-баром в code-блоке."""
+    rng = f"пары {pairs[0][1]}–{pairs[-1][2]}"
     if minutes_now is not None:
         return f"<code>{progress_bar(pairs, minutes_now)}\n{rng}</code>"
-    return f"<code>{rng}</code>"
+    return rng
 
 
 def day_text(d, suffix=""):
@@ -132,14 +137,25 @@ def day_text(d, suffix=""):
     if not pairs:
         line = "сегодня пар нет" if d == now.date() else "пар нет"
         return f"{head}\n\n<i>{line}</i>"
+    minutes = now.hour * 60 + now.minute
     if d == now.date():
-        head += "\n" + day_span_block(pairs, now.hour * 60 + now.minute)
+        head += "\n" + day_span_block(pairs, minutes)
+        status = status_line(pairs, minutes)
     else:
         head += "\n" + day_span_block(pairs)
-    text = head + "\n\n" + "\n\n".join(pair_block(e) for e in pairs)
-    if d == now.date():
-        text += "\n\n<i>" + status_line(pairs, now.hour * 60 + now.minute) + "</i>"
-    return text
+        status = None
+    if status is None:  # не сегодня: без бара-статусов и заметок
+        text = head
+        blocks = [pair_block(e) for e in pairs]
+    elif status == "занятия окончены" or status.startswith(("перемена", "до первой")):
+        text = head + "\n\n<i>" + status + "</i>"
+        blocks = [pair_block(e) for e in pairs]
+    else:
+        running = next((e for e in pairs if hm(e[1]) <= minutes < hm(e[2])), None)
+        blocks = [pair_block(e, f"до конца {hm(e[2]) - minutes} мин") if e is running else pair_block(e)
+                  for e in pairs]
+        text = head
+    return text + "\n\n" + "\n\n".join(blocks)
 
 
 def now_text():
@@ -155,21 +171,24 @@ def now_text():
         if nxt:
             nd, first = nxt
             hint = (f"завтра: {first[0]}-я пара в {first[1]} — {html.escape(first[3])}"
+                    + (f", ауд. {fmt_rooms(first[4])}" if first[4] else "")
                     if (nd - d).days == 1 else
                     f"ближайшая пара: {WD_FULL[nd.weekday()].lower()}, {nd:%d.%m}, "
-                    f"{first[0]}-я в {first[1]} — {html.escape(first[3])}")
+                    f"{first[0]}-я в {first[1]} — {html.escape(first[3])}"
+                    + (f", ауд. {fmt_rooms(first[4])}" if first[4] else ""))
             text += f"\n\n<blockquote>{hint}</blockquote>"
     else:
-        head += "\n" + day_span_block(pairs, minutes)
         running = next((e for e in pairs if hm(e[1]) <= minutes < hm(e[2])), None)
         upcoming = next((e for e in pairs if minutes < hm(e[1])), None)
+        if running is not None or upcoming is not None:
+            head += "\n" + day_span_block(pairs, minutes)
         if running is not None:
             i = pairs.index(running)
             text = head + "\n\n" + pair_block(running) + f"\n<i>до конца {hm(running[2]) - minutes} мин</i>"
             if i + 1 < len(pairs):
                 nxt = pairs[i + 1]
                 hint = (f"дальше: {nxt[0]}-я пара в {nxt[1]} — "
-                        f"{html.escape(nxt[3])}" + (f", ауд. {nxt[4]}" if nxt[4] else ""))
+                        f"{html.escape(nxt[3])}" + (f", ауд. {fmt_rooms(nxt[4])}" if nxt[4] else ""))
                 text += f"\n\n<blockquote>{hint}</blockquote>"
         elif upcoming is not None:
             gap = hm(upcoming[1]) - minutes
@@ -181,9 +200,11 @@ def now_text():
             if nxt:
                 nd, first = nxt
                 hint = (f"завтра: {first[0]}-я пара в {first[1]} — {html.escape(first[3])}"
+                        + (f", ауд. {fmt_rooms(first[4])}" if first[4] else "")
                         if (nd - d).days == 1 else
                         f"ближайшая пара: {WD_FULL[nd.weekday()].lower()}, {nd:%d.%m}, "
-                        f"{first[0]}-я в {first[1]} — {html.escape(first[3])}")
+                        f"{first[0]}-я в {first[1]} — {html.escape(first[3])}"
+                        + (f", ауд. {fmt_rooms(first[4])}" if first[4] else ""))
                 text += f"\n\n<blockquote>{hint}</blockquote>"
     return text
 
@@ -207,19 +228,32 @@ def pairs_word(n):
 
 
 def render_week(monday):
-    """Компактная неделя от заданного понедельника (HTML: шапка и дни жирным)."""
-    lines = [f"<b>Неделя {monday:%d.%m}–{monday + timedelta(days=6):%d.%m} · {week_mark(monday)} чертой</b>"]
-    for i in range(7):
-        day = monday + timedelta(days=i)
-        pairs = day_pairs(day)
+    """Компактная неделя (HTML: шапка и дни жирным, счётчики курсивом,
+    пустые выходные — одним блоком, сегодняшний день помечен)."""
+    today = datetime.now(TZ).date()
+    days = [monday + timedelta(days=i) for i in range(7)]
+    counts = [len(day_pairs(d)) for d in days]
+    lines = [f"<b>Неделя {monday:%d.%m}–{days[6]:%d.%m} · {week_mark(monday)} чертой</b>"]
+    merged = []
+    i = 0
+    while i < 7:
+        if i == 5 and counts[5] == 0 and counts[6] == 0:
+            merged.append(("Сб–Вс", [days[5], days[6]]))
+            i += 2
+        else:
+            merged.append((WD_SHORT[i], [days[i]]))
+            i += 1
+    for wd, ds in merged:
         lines.append("")
-        lines.append(f"<b>{WD_SHORT[i]} {day:%d.%m}</b>")
-        if not pairs:
+        marks = [f"<b>{wd} {d:%d.%m}</b>" + (" · сегодня" if d == today else "") for d in ds]
+        lines.append(" · ".join(marks))
+        count = len(day_pairs(ds[0]))
+        if count == 0:
             lines.append("пар нет")
             continue
-        for num, st, _en, subj, rooms, _t, _w in pairs:
-            lines.append(f"{num} ({st}) {html.escape(subj)}, ауд. {rooms}" if rooms else f"{num} ({st}) {html.escape(subj)}")
-        lines.append(f"{len(pairs)} {pairs_word(len(pairs))}")
+        for num, st, _en, subj, rooms, _t, _w in day_pairs(ds[0]):
+            lines.append(f"{num} ({st}) {html.escape(subj)}, ауд. {fmt_rooms(rooms)}" if rooms else f"{num} ({st}) {html.escape(subj)}")
+        lines.append(f"<i>{count} {pairs_word(count)}</i>")
     return "\n".join(lines)
 
 
@@ -281,7 +315,7 @@ def bells_text():
     width = max(len(en) for _n, _s, en, _a, _b, _br in BELLS)
     for num, st, en, first, second, br in BELLS:
         tail = f"   перерыв {br}" if br else ""
-        lines.append(f"{num}-я  {st}–{en}{' ' * (width - len(en) + 1)}{tail}".rstrip())
+        lines.append(f"{num}-я  {st}–{en}{' ' * (width - len(en))}{tail}".rstrip())
         lines.append(f"├ 1-й час  {first}")
         lines.append("├ перемена 5 мин")
         lines.append(f"└ 2-й час  {second}")
@@ -314,14 +348,17 @@ def ics_for_week(monday):
 
 def morning_text(d):
     """Утренняя сводка: компактная раскладка дня в одну строку на пару."""
-    head = f"<b>Доброе утро. {WD_FULL[d.weekday()]}, {d:%d.%m.%Y}</b>\nНеделя {week_mark(d)} чертой"
+    head = f"<b>Доброе утро · {WD_FULL[d.weekday()]}, {d:%d.%m.%Y}</b>\nНеделя {week_mark(d)} чертой"
     pairs = day_pairs(d)
     if not pairs:
         return f"{head}\n\n<i>сегодня пар нет</i>"
+    now = datetime.now(TZ)
+    mins = now.hour * 60 + now.minute
+    info = day_span_block(pairs, mins) + f"\n<i>до 1-й пары {hm(pairs[0][1]) - mins} мин</i>"
     lines = []
     for num, st, _en, subj, rooms, _t, _w in pairs:
-        lines.append(f"{num} ({st}) {html.escape(subj)}, ауд. {rooms}" if rooms else f"{num} ({st}) {html.escape(subj)}")
-    return head + "\n\n" + "\n".join(lines) + f"\n{len(pairs)} {pairs_word(len(pairs))}"
+        lines.append(f"{num} ({st}) {html.escape(subj)}, ауд. {fmt_rooms(rooms)}" if rooms else f"{num} ({st}) {html.escape(subj)}")
+    return head + "\n" + info + "\n\n" + "\n".join(lines) + f"\n<i>{len(pairs)} {pairs_word(len(pairs))}</i>"
 
 
 class Telegram:
@@ -413,7 +450,7 @@ async def on_message(tg, msg):
     elif text == BTN_BELLS:
         await send(tg, chat_id, bells_text(), parse_mode="HTML")
     else:  # BTN_PICK — сетка текущего месяца
-        await send(tg, chat_id, "Выберите дату:", calendar_kb(today.year, today.month))
+        await send(tg, chat_id, "Выбери дату:", calendar_kb(today.year, today.month))
 
 
 async def handle_update(tg, update):
@@ -440,11 +477,10 @@ async def renewal_watchdog(http, tg):
             hours_left = (expires - datetime.now(timezone.utc)).total_seconds() / 3600
             bucket = "ok" if hours_left > 30 else ("soon" if hours_left > 6 else "urgent")
             if bucket != "ok" and bucket != last_bucket:
-                word = "меньше суток" if bucket == "soon" else f"{int(hours_left)} ч"
                 await send(tg, OWNER_ID,
-                           f"Напоминание: сервер fps.ms остановится через {word}. "
-                           f"Продли его в панели (кнопка Add 24 hours): "
-                           f"{FPSMS_PANEL_URL}/server/{FPSMS_SERVER.split('-')[0]}")
+                           f"Напоминание: сервер fps.ms остановится примерно через "
+                           f"{max(1, int(hours_left))} ч. Продли сервер в панели "
+                           f"(кнопка Add 24 hours): {FPSMS_PANEL_URL}/server/{FPSMS_SERVER.split('-')[0]}")
         except Exception:
             logging.exception("watchdog check failed")
         last_bucket = bucket
