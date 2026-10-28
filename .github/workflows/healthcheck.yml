@@ -2,7 +2,9 @@ name: healthcheck
 
 on:
   schedule:
+    # два слота: планировщик GitHub бывает перегружен, второй шанс в часе не помешает
     - cron: "17 * * * *"
+    - cron: "43 * * * *"
   workflow_dispatch:
 
 jobs:
