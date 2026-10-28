@@ -51,7 +51,7 @@ BTN_BELLS = "Звонки"
 BTN_PICK = "Выбрать день"
 BUTTONS = {BTN_TODAY, BTN_TOMORROW, BTN_NOW, BTN_WEEK, BTN_BELLS, BTN_PICK}
 
-GREETING = "Расписание группы А-11. Кнопки ниже."
+GREETING = "Расписание группы А-11. Выбирай кнопкой ниже."
 
 
 def main_kb():
@@ -128,10 +128,10 @@ def now_text():
         nxt = next_day_first_pair(d)
         if nxt:
             nd, first = nxt
-            text += (f"\n\nзавтра: {first[0]}-я пара {first[1]}, {html.escape(first[3])}"
+            text += (f"\n\nзавтра: {first[0]}-я пара в {first[1]} — {html.escape(first[3])}"
                      if (nd - d).days == 1 else
-                     f"\n\nближайшие пары: {WD_FULL[nd.weekday()].lower()} {nd:%d.%m}, "
-                     f"{first[0]}-я пара {first[1]}, {html.escape(first[3])}")
+                     f"\n\nближайшая пара: {WD_FULL[nd.weekday()].lower()}, {nd:%d.%m}, "
+                     f"{first[0]}-я в {first[1]} — {html.escape(first[3])}")
     else:
         running = next((e for e in pairs if hm(e[1]) <= minutes < hm(e[2])), None)
         upcoming = next((e for e in pairs if minutes < hm(e[1])), None)
@@ -140,7 +140,7 @@ def now_text():
             text = head + "\n\n" + pair_block(running) + f"\n<i>до конца {hm(running[2]) - minutes} мин</i>"
             if i + 1 < len(pairs):
                 nxt = pairs[i + 1]
-                text += (f"\n\nдалее: {nxt[0]}-я пара {nxt[1]}, "
+                text += (f"\n\nдальше: {nxt[0]}-я пара в {nxt[1]} — "
                          f"{html.escape(nxt[3])}" + (f", ауд. {nxt[4]}" if nxt[4] else ""))
         elif upcoming is not None:
             gap = hm(upcoming[1]) - minutes
@@ -151,10 +151,10 @@ def now_text():
             nxt = next_day_first_pair(d)
             if nxt:
                 nd, first = nxt
-                text += (f"\n\nзавтра: {first[0]}-я пара {first[1]}, {html.escape(first[3])}"
+                text += (f"\n\nзавтра: {first[0]}-я пара в {first[1]} — {html.escape(first[3])}"
                          if (nd - d).days == 1 else
-                         f"\n\nближайшие пары: {WD_FULL[nd.weekday()].lower()} {nd:%d.%m}, "
-                         f"{first[0]}-я пара {first[1]}, {html.escape(first[3])}")
+                         f"\n\nближайшая пара: {WD_FULL[nd.weekday()].lower()}, {nd:%d.%m}, "
+                         f"{first[0]}-я в {first[1]} — {html.escape(first[3])}")
     return text
 
 
@@ -408,10 +408,11 @@ async def renewal_watchdog(http, tg):
             hours_left = (expires - datetime.now(timezone.utc)).total_seconds() / 3600
             bucket = "ok" if hours_left > 30 else ("soon" if hours_left > 6 else "urgent")
             if bucket != "ok" and bucket != last_bucket:
-                word = "осталось меньше суток" if bucket == "soon" else f"осталось {int(hours_left)} ч"
+                word = "меньше суток" if bucket == "soon" else f"{int(hours_left)} ч"
                 await send(tg, OWNER_ID,
-                           f"fps.ms: до остановки сервера {word}. "
-                           f"Продли кнопкой Add 24 hours: {FPSMS_PANEL_URL}/server/{FPSMS_SERVER.split('-')[0]}")
+                           f"Напоминание: сервер fps.ms остановится через {word}. "
+                           f"Продли его в панели (кнопка Add 24 hours): "
+                           f"{FPSMS_PANEL_URL}/server/{FPSMS_SERVER.split('-')[0]}")
         except Exception:
             logging.exception("watchdog check failed")
         last_bucket = bucket
