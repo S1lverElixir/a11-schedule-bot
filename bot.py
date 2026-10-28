@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 
 from schedule_data import (
     BELLS,
+    KIND,
     SCHEDULE,
     SEMESTER_END,
     SEMESTER_START,
@@ -99,7 +100,9 @@ def pair_block(entry, note=None):
     """HTML-блок пары: жирная строка времени, предмет с аудиторией, преподаватели;
     note — курсивная приписка (для идущей пары)."""
     num, st, en, subj, rooms, teachers, _w = entry
-    second = f"{html.escape(subj)}, ауд. {fmt_rooms(rooms)}" if rooms else html.escape(subj)
+    title = (f"{KIND.get(subj, '')} · {html.escape(subj)}" if KIND.get(subj)
+             else html.escape(subj))
+    second = f"{title}, ауд. {fmt_rooms(rooms)}" if rooms else title
     text = f"<b>{num}-я пара {st}–{en}</b>\n{second}\n{html.escape(', '.join(teachers))}"
     return text + (f"\n<i>{note}</i>" if note else "")
 
@@ -254,7 +257,9 @@ def render_week(monday):
             lines.append("пар нет")
             continue
         for num, st, _en, subj, rooms, _t, _w in day_pairs(ds[0]):
-            lines.append(f"{num} ({st}) {html.escape(subj)}, ауд. {fmt_rooms(rooms)}" if rooms else f"{num} ({st}) {html.escape(subj)}")
+            title = (f"{KIND.get(subj, '')} · {html.escape(subj)}" if KIND.get(subj)
+                     else html.escape(subj))
+            lines.append(f"{num} ({st}) {title}, ауд. {fmt_rooms(rooms)}" if rooms else f"{num} ({st}) {title}")
         lines.append(f"<i>{count} {pairs_word(count)}</i>")
     return "\n".join(lines)
 
@@ -359,7 +364,9 @@ def morning_text(d):
     info = day_span_block(pairs, mins) + f"\n<i>до 1-й пары {hm(pairs[0][1]) - mins} мин</i>"
     lines = []
     for num, st, _en, subj, rooms, _t, _w in pairs:
-        lines.append(f"{num} ({st}) {html.escape(subj)}, ауд. {fmt_rooms(rooms)}" if rooms else f"{num} ({st}) {html.escape(subj)}")
+        title = (f"{KIND.get(subj, '')} · {html.escape(subj)}" if KIND.get(subj)
+                 else html.escape(subj))
+        lines.append(f"{num} ({st}) {title}, ауд. {fmt_rooms(rooms)}" if rooms else f"{num} ({st}) {title}")
     return head + "\n" + info + "\n\n" + "\n".join(lines) + f"\n<i>{len(pairs)} {pairs_word(len(pairs))}</i>"
 
 
