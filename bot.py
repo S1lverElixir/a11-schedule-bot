@@ -245,8 +245,10 @@ def render_week(monday):
             i += 1
     for wd, ds in merged:
         lines.append("")
-        marks = [f"<b>{wd} {d:%d.%m}</b>" + (" · сегодня" if d == today else "") for d in ds]
-        lines.append(" · ".join(marks))
+        if len(ds) == 1:
+            lines.append(f"<b>{wd} {ds[0]:%d.%m}</b>" + (" · сегодня" if ds[0] == today else ""))
+        else:
+            lines.append(f"<b>{wd} {ds[0]:%d.%m} · {ds[1]:%d.%m}</b>")
         count = len(day_pairs(ds[0]))
         if count == 0:
             lines.append("пар нет")
