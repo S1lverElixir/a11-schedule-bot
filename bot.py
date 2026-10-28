@@ -3,7 +3,7 @@
 
 Транспорт — чистый aiohttp + long polling: бесплатный хостинг даёт 128 МБ RAM,
 импорт aiogram (с pydantic) в этот лимит не помещается. Логика и форматы сообщений
-— строго по SPEC.md; вся предметная логика здесь та же, что была на aiogram.
+— строго по SPEC.md.
 """
 
 import asyncio
@@ -26,6 +26,10 @@ from schedule_data import (
 load_dotenv()
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 OWNER_ID = int(os.environ["MY_TELEGRAM_ID"])
+# параметры watchdog'а продления fps.ms (необязательные)
+FPSMS_API_KEY = os.environ.get("FPSMS_API_KEY", "")
+FPSMS_SERVER = os.environ.get("FPSMS_SERVER_UUID", "")
+FPSMS_PANEL_URL = os.environ.get("FPSMS_PANEL_URL", "https://panel.fps.ms")
 
 TZ = timezone(timedelta(hours=3))  # Минск, фиксированный UTC+3 — без pytz/zoneinfo
 
@@ -39,17 +43,18 @@ MONTHS = ["Январь", "Февраль", "Март", "Апрель", "Май"
 
 BTN_TODAY = "Сегодня"
 BTN_TOMORROW = "Завтра"
+BTN_NOW = "Сейчас"
 BTN_WEEK = "Неделя"
 BTN_BELLS = "Звонки"
 BTN_PICK = "Выбрать день"
-BUTTONS = {BTN_TODAY, BTN_TOMORROW, BTN_WEEK, BTN_BELLS, BTN_PICK}
+BUTTONS = {BTN_TODAY, BTN_TOMORROW, BTN_NOW, BTN_WEEK, BTN_BELLS, BTN_PICK}
 
 GREETING = "Расписание группы А-11. Кнопки ниже."
 
 
 def main_kb():
     return {"keyboard": [
-        [{"text": BTN_TODAY}, {"text": BTN_TOMORROW}, {"text": BTN_WEEK}],
+        [{"text": BTN_TODAY}, {"text": BTN_TOMORROW}, {"text": BTN_NOW}, {"text": BTN_WEEK}],
         [{"text": BTN_BELLS}, {"text": BTN_PICK}],
     ], "resize_keyboard": True}
 
@@ -84,6 +89,13 @@ def status_line(pairs, now):
     return "занятия окончены"
 
 
+def pair_block(entry):
+    """HTML-блок пары: жирная строка времени, предмет с аудиторией, преподаватели."""
+    num, st, en, subj, rooms, teachers, _w = entry
+    second = f"{html.escape(subj)}, ауд. {rooms}" if rooms else html.escape(subj)
+    return (f"<b>{num}-я пара {st}–{en}</b>\n{second}\n{html.escape(', '.join(teachers))}")
+
+
 def day_text(d, suffix=""):
     """Сообщение одного дня в HTML: шапка и номера пар жирным, статус курсивом.
     Суффикс « · сегодня»/« · завтра» — только для кнопок «Сегодня»/«Завтра».
@@ -96,14 +108,62 @@ def day_text(d, suffix=""):
     if not pairs:
         line = "сегодня пар нет" if d == now.date() else "пар нет"
         return f"{head}\n\n<i>{line}</i>"
-    blocks = []
-    for num, st, en, subj, rooms, teachers, _w in pairs:
-        second = f"{html.escape(subj)}, ауд. {rooms}" if rooms else html.escape(subj)
-        blocks.append(f"<b>{num}-я пара {st}–{en}</b>\n{second}\n{html.escape(', '.join(teachers))}")
-    text = head + "\n\n" + "\n\n".join(blocks)
+    text = head + "\n\n" + "\n\n".join(pair_block(e) for e in pairs)
     if d == now.date():
         text += "\n\n<i>" + status_line(pairs, now.hour * 60 + now.minute) + "</i>"
     return text
+
+
+def now_text():
+    """Кнопка «Сейчас»: что происходит прямо сейчас и что дальше."""
+    now = datetime.now(TZ)
+    d = now.date()
+    minutes = now.hour * 60 + now.minute
+    head = f"<b>Сейчас {now:%H:%M}, {WD_FULL[d.weekday()]} {d:%d.%m}</b>\nНеделя {week_mark(d)} чертой"
+    pairs = day_pairs(d)
+    if not pairs:
+        text = f"{head}\n\n<i>сегодня пар нет</i>"
+        nxt = next_day_first_pair(d)
+        if nxt:
+            nd, first = nxt
+            text += (f"\n\nзавтра: {first[0]}-я пара {first[1]}, {html.escape(first[3])}"
+                     if (nd - d).days == 1 else
+                     f"\n\nближайшие пары: {WD_FULL[nd.weekday()].lower()} {nd:%d.%m}, "
+                     f"{first[0]}-я пара {first[1]}, {html.escape(first[3])}")
+    else:
+        running = next((e for e in pairs if hm(e[1]) <= minutes < hm(e[2])), None)
+        upcoming = next((e for e in pairs if minutes < hm(e[1])), None)
+        if running is not None:
+            i = pairs.index(running)
+            text = head + "\n\n" + pair_block(running) + f"\n<i>до конца {hm(running[2]) - minutes} мин</i>"
+            if i + 1 < len(pairs):
+                nxt = pairs[i + 1]
+                text += (f"\n\nдалее: {nxt[0]}-я пара {nxt[1]}, "
+                         f"{html.escape(nxt[3])}" + (f", ауд. {nxt[4]}" if nxt[4] else ""))
+        elif upcoming is not None:
+            gap = hm(upcoming[1]) - minutes
+            label = "до первой пары" if upcoming is pairs[0] else "перемена"
+            text = head + f"\n\n<i>{label}, {gap} мин</i>\n\n" + pair_block(upcoming)
+        else:
+            text = head + "\n\n<i>занятия окончены</i>"
+            nxt = next_day_first_pair(d)
+            if nxt:
+                nd, first = nxt
+                text += (f"\n\nзавтра: {first[0]}-я пара {first[1]}, {html.escape(first[3])}"
+                         if (nd - d).days == 1 else
+                         f"\n\nближайшие пары: {WD_FULL[nd.weekday()].lower()} {nd:%d.%m}, "
+                         f"{first[0]}-я пара {first[1]}, {html.escape(first[3])}")
+    return text
+
+
+def next_day_first_pair(after):
+    """Дата (в пределах недели вперёд) и первая пара ближайшего дня с парами."""
+    for i in range(1, 8):
+        d = after + timedelta(days=i)
+        pairs = day_pairs(d)
+        if pairs:
+            return d, pairs[0]
+    return None
 
 
 def pairs_word(n):
@@ -114,10 +174,9 @@ def pairs_word(n):
     return "пар"
 
 
-def week_text(d):
-    """Компактная неделя, содержащая d: по строке на пару, без преподавателей."""
-    monday = d - timedelta(days=d.weekday())
-    lines = [f"Неделя {monday:%d.%m}–{monday + timedelta(days=6):%d.%m} · {week_mark(d)} чертой"]
+def render_week(monday):
+    """Компактная неделя от заданного понедельника (HTML: шапка жирным)."""
+    lines = [f"<b>Неделя {monday:%d.%m}–{monday + timedelta(days=6):%d.%m} · {week_mark(monday)} чертой</b>"]
     for i in range(7):
         day = monday + timedelta(days=i)
         pairs = day_pairs(day)
@@ -127,26 +186,28 @@ def week_text(d):
             lines.append("пар нет")
             continue
         for num, st, _en, subj, rooms, _t, _w in pairs:
-            lines.append(f"{num} ({st}) {subj}, ауд. {rooms}" if rooms else f"{num} ({st}) {subj}")
+            lines.append(f"{num} ({st}) {html.escape(subj)}, ауд. {rooms}" if rooms else f"{num} ({st}) {html.escape(subj)}")
         lines.append(f"{len(pairs)} {pairs_word(len(pairs))}")
     return "\n".join(lines)
 
 
+def week_text(d):
+    """Компактная неделя, содержащая d: по строке на пару, без преподавателей."""
+    return render_week(d - timedelta(days=d.weekday()))
+
+
+def week_kb(monday):
+    prev = monday - timedelta(days=7)
+    nxt = monday + timedelta(days=7)
+    return {"inline_keyboard": [[
+        {"text": "‹", "callback_data": f"wk:{prev:%Y-%m-%d}"},
+        {"text": "экспорт в календарь", "callback_data": f"ics:{monday:%Y-%m-%d}"},
+        {"text": "›", "callback_data": f"wk:{nxt:%Y-%m-%d}"},
+    ]]}
+
+
 def next_month_first(y, m):
     return date(y + 1, 1, 1) if m == 12 else date(y, m + 1, 1)
-
-
-def bells_text():
-    """«Звонки» в HTML: моношрифт-таблица с ровными колонками."""
-    lines = []
-    width = max(len(en) for _n, _s, en, _a, _b, _br in BELLS)
-    for num, st, en, _a, _b, br in BELLS:
-        tail = f"   перерыв {br}" if br else ""
-        lines.append(f"{num}-я  {st}–{en}{' ' * (width - len(en) + 1)}{tail}".rstrip())
-    body = "\n".join(lines)
-    return ("<b>Расписание звонков</b>\n"
-            f"<code>{body}</code>\n\n"
-            "<i>внутри каждой пары: 45 мин, перемена 5 мин</i>")
 
 
 def month_intersects(y, m):
@@ -182,6 +243,42 @@ def calendar_kb(y, m):
     return {"inline_keyboard": rows}
 
 
+def bells_text():
+    """«Звонки» в HTML: моношрифт-таблица с ровными колонками."""
+    lines = []
+    width = max(len(en) for _n, _s, en, _a, _b, _br in BELLS)
+    for num, st, en, _a, _b, br in BELLS:
+        tail = f"   перерыв {br}" if br else ""
+        lines.append(f"{num}-я  {st}–{en}{' ' * (width - len(en) + 1)}{tail}".rstrip())
+    body = "\n".join(lines)
+    return ("<b>Расписание звонков</b>\n"
+            f"<code>{body}</code>\n\n"
+            "<i>внутри каждой пары: 45 мин, перемена 5 мин</i>")
+
+
+def ics_for_week(monday):
+    """ICS-файл недели: событие на каждую пару, время локальное плавающее."""
+    out = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//a11-schedule-bot//RU",
+           "CALSCALE:GREGORIAN"]
+    stamp = datetime.now(TZ).strftime("%Y%m%dT%H%M%S")
+    for i in range(7):
+        day = monday + timedelta(days=i)
+        for num, st, en, subj, rooms, teachers, _w in day_pairs(day):
+            def t(s):
+                return s.replace(":", "") + "00"
+            out += ["BEGIN:VEVENT",
+                    f"UID:{day:%Y%m%d}-{num}@a11-bot",
+                    f"DTSTAMP:{stamp}",
+                    f"DTSTART:{day:%Y%m%d}T{t(st)}",
+                    f"DTEND:{day:%Y%m%d}T{t(en)}",
+                    "SUMMARY:" + subj.replace(",", "\\,"),
+                    "LOCATION:" + (rooms or "").replace(",", "\\,"),
+                    "DESCRIPTION:" + ", ".join(teachers).replace(",", "\\,"),
+                    "END:VEVENT"]
+    out.append("END:VCALENDAR")
+    return "\r\n".join(out).encode("utf-8")
+
+
 class Telegram:
     """Минимальный клиент Bot API поверх одной aiohttp-сессии."""
 
@@ -196,6 +293,19 @@ class Telegram:
             raise RuntimeError(f"{method}: {data.get('description')}")
         return data["result"]
 
+    async def send_document(self, chat_id, filename, content, caption=None):
+        form = aiohttp.FormData()
+        form.add_field("chat_id", str(chat_id))
+        if caption:
+            form.add_field("caption", caption, content_type="text/plain; charset=utf-8",
+                           **{"Content-Type": None})
+        form.add_field("document", content, filename=filename,
+                       content_type="text/calendar")
+        async with self._http.post(f"{self._base}/sendDocument", data=form) as resp:
+            data = await resp.json()
+        if not data.get("ok"):
+            raise RuntimeError(f"sendDocument: {data.get('description')}")
+
 
 async def send(tg, chat_id, text, reply_markup=None, parse_mode=None):
     params = {"chat_id": chat_id, "text": text}
@@ -207,19 +317,31 @@ async def send(tg, chat_id, text, reply_markup=None, parse_mode=None):
 
 
 async def on_callback(tg, cb):
-    # cal:2026-10:23 — дата; cal:2026-10 — листание месяца; cal:x — неактивная клетка
+    # cal:2026-10:23 — дата; cal:2026-10 — листание месяца; cal:x — неактивная клетка;
+    # wk:2026-11-02 — неделя от понедельника; ics:2026-11-02 — экспорт недели
     parts = cb["data"].split(":")
     await tg.call("answerCallbackQuery", callback_query_id=cb["id"])
     if parts[1] == "x":
         return
-    y, m = (int(v) for v in parts[1].split("-"))
     chat_id = cb["message"]["chat"]["id"]
-    if len(parts) == 3:
-        # новое сообщение, календарь в чате остаётся
-        await send(tg, chat_id, day_text(date(y, m, int(parts[2]))), parse_mode="HTML")
-    else:
-        await tg.call("editMessageReplyMarkup", chat_id=chat_id,
-                      message_id=cb["message"]["message_id"], reply_markup=calendar_kb(y, m))
+    if parts[0] == "cal":
+        y, m = (int(v) for v in parts[1].split("-"))
+        if len(parts) == 3:
+            # новое сообщение, календарь в чате остаётся
+            await send(tg, chat_id, day_text(date(y, m, int(parts[2]))), parse_mode="HTML")
+        else:
+            await tg.call("editMessageReplyMarkup", chat_id=chat_id,
+                          message_id=cb["message"]["message_id"], reply_markup=calendar_kb(y, m))
+    elif parts[0] == "wk":
+        y, m, d = (int(v) for v in parts[1].split("-"))
+        monday = date(y, m, d)
+        await send(tg, chat_id, render_week(monday), reply_markup=week_kb(monday), parse_mode="HTML")
+    elif parts[0] == "ics":
+        y, m, d = (int(v) for v in parts[1].split("-"))
+        monday = date(y, m, d)
+        name = f"raspisanie_{monday:%d.%m}-{monday + timedelta(days=6):%d.%m}.ics"
+        await tg.send_document(chat_id, name, ics_for_week(monday),
+                               caption=f"Неделя {monday:%d.%m}–{monday + timedelta(days=6):%d.%m} · {week_mark(monday)} чертой")
 
 
 async def on_message(tg, msg):
@@ -237,8 +359,11 @@ async def on_message(tg, msg):
         await send(tg, chat_id, day_text(today, " · сегодня"), parse_mode="HTML")
     elif text == BTN_TOMORROW:
         await send(tg, chat_id, day_text(today + timedelta(days=1), " · завтра"), parse_mode="HTML")
+    elif text == BTN_NOW:
+        await send(tg, chat_id, now_text(), parse_mode="HTML")
     elif text == BTN_WEEK:
-        await send(tg, chat_id, week_text(today))
+        monday = today - timedelta(days=today.weekday())
+        await send(tg, chat_id, week_text(today), reply_markup=week_kb(monday), parse_mode="HTML")
     elif text == BTN_BELLS:
         await send(tg, chat_id, bells_text(), parse_mode="HTML")
     else:  # BTN_PICK — сетка текущего месяца
@@ -250,6 +375,33 @@ async def handle_update(tg, update):
         await on_message(tg, update["message"])
     elif "callback_query" in update:
         await on_callback(tg, update["callback_query"])
+
+
+async def renewal_watchdog(http, tg):
+    """Следит за сроком сервера fps.ms и напоминает владельцу продлить.
+    Продление защищено reCAPTCHA, поэтому автоматом — только напоминание."""
+    if not (FPSMS_API_KEY and FPSMS_SERVER):
+        return
+    url = f"{FPSMS_PANEL_URL}/api/client/servers/{FPSMS_SERVER}"
+    headers = {"Authorization": f"Bearer {FPSMS_API_KEY}"}
+    last_bucket = None
+    while True:
+        bucket = None
+        try:
+            async with http.get(url, headers=headers) as resp:
+                data = await resp.json()
+            expires = datetime.fromisoformat(data["attributes"]["expires_at"].replace("Z", "+00:00"))
+            hours_left = (expires - datetime.now(timezone.utc)).total_seconds() / 3600
+            bucket = "ok" if hours_left > 30 else ("soon" if hours_left > 6 else "urgent")
+            if bucket != "ok" and bucket != last_bucket:
+                word = "осталось меньше суток" if bucket == "soon" else f"осталось {int(hours_left)} ч"
+                await send(tg, OWNER_ID,
+                           f"fps.ms: до остановки сервера {word}. "
+                           f"Продли кнопкой Add 24 hours: {FPSMS_PANEL_URL}/server/{FPSMS_SERVER.split('-')[0]}")
+        except Exception:
+            logging.exception("watchdog check failed")
+        last_bucket = bucket
+        await asyncio.sleep(3600)
 
 
 async def main():
@@ -264,6 +416,7 @@ async def main():
         except RuntimeError:
             pass
         logging.info("Start polling")
+        asyncio.create_task(renewal_watchdog(http, tg))
         offset = 0
         while True:
             try:

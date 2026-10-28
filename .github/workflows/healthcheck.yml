@@ -1,0 +1,30 @@
+name: healthcheck
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check bot is polling, alert owner if not
+        run: |
+          TOKEN="${{ secrets.BOT_TOKEN }}"
+          CHAT="${{ secrets.MY_TELEGRAM_ID }}"
+          check() {
+            # живой polling-бот держит getUpdates => наш запрос получает 409
+            curl -s --max-time 30 "https://api.telegram.org/bot${TOKEN}/getUpdates?timeout=5" | grep -q "409"
+          }
+          if check || { sleep 60 && check; }; then
+            echo "bot is polling: OK"
+          else
+            echo "bot is DOWN, sending alert"
+            curl -s --max-time 30 "https://api.telegram.org/bot${TOKEN}/sendMessage" \
+              -d chat_id="${CHAT}" \
+              --data-urlencode "text=Бот не отвечает (healthcheck). Проверь панель fps.ms, возможно нужен перезапуск." > /dev/null
+            # попытка самопомощи: рестарт сервера через панель
+            curl -sf --max-time 30 -X POST "https://panel.fps.ms/api/client/servers/1438731f/power" \
+              -H "Authorization: Bearer ${{ secrets.FPSMS_API_KEY }}" \
+              -H "Content-Type: application/json" -d '{"signal": "restart"}' > /dev/null || true
+          fi
