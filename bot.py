@@ -244,16 +244,15 @@ def calendar_kb(y, m):
 
 
 def bells_text():
-    """«Звонки» в HTML: моношрифт-таблица с ровными колонками."""
+    """«Звонки» в HTML: моношрифт-таблица; у каждой пары — обе половины и перемена между ними."""
     lines = []
     width = max(len(en) for _n, _s, en, _a, _b, _br in BELLS)
-    for num, st, en, _a, _b, br in BELLS:
+    for num, st, en, first, second, br in BELLS:
         tail = f"   перерыв {br}" if br else ""
         lines.append(f"{num}-я  {st}–{en}{' ' * (width - len(en) + 1)}{tail}".rstrip())
+        lines.append(f"     {first} · перемена 5 мин · {second}")
     body = "\n".join(lines)
-    return ("<b>Расписание звонков</b>\n"
-            f"<code>{body}</code>\n\n"
-            "<i>внутри каждой пары: 45 мин, перемена 5 мин</i>")
+    return "<b>Расписание звонков</b>\n" + f"<code>{body}</code>"
 
 
 def ics_for_week(monday):
