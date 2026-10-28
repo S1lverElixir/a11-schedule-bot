@@ -30,6 +30,8 @@ OWNER_ID = int(os.environ["MY_TELEGRAM_ID"])
 FPSMS_API_KEY = os.environ.get("FPSMS_API_KEY", "")
 FPSMS_SERVER = os.environ.get("FPSMS_SERVER_UUID", "")
 FPSMS_PANEL_URL = os.environ.get("FPSMS_PANEL_URL", "https://panel.fps.ms")
+# время утренней сводки «HH:MM» (Минск); пустая строка — выключить
+MORNING_SUMMARY_TIME = os.environ.get("MORNING_SUMMARY_TIME", "07:30")
 
 TZ = timezone(timedelta(hours=3))  # Минск, фиксированный UTC+3 — без pytz/zoneinfo
 
@@ -278,6 +280,18 @@ def ics_for_week(monday):
     return "\r\n".join(out).encode("utf-8")
 
 
+def morning_text(d):
+    """Утренняя сводка: компактная раскладка дня в одну строку на пару."""
+    head = f"<b>Доброе утро. {WD_FULL[d.weekday()]}, {d:%d.%m.%Y}</b>\nНеделя {week_mark(d)} чертой"
+    pairs = day_pairs(d)
+    if not pairs:
+        return f"{head}\n\n<i>сегодня пар нет</i>"
+    lines = []
+    for num, st, _en, subj, rooms, _t, _w in pairs:
+        lines.append(f"{num} ({st}) {html.escape(subj)}, ауд. {rooms}" if rooms else f"{num} ({st}) {html.escape(subj)}")
+    return head + "\n\n" + "\n".join(lines) + f"\n{len(pairs)} {pairs_word(len(pairs))}"
+
+
 class Telegram:
     """Минимальный клиент Bot API поверх одной aiohttp-сессии."""
 
@@ -403,6 +417,30 @@ async def renewal_watchdog(http, tg):
         await asyncio.sleep(3600)
 
 
+async def morning_summary(http, tg):
+    """Утренняя сводка: ежедневно в MORNING_SUMMARY_TIME (±полтора часа окна на
+    случай простоя) присылает раскладку дня; если бот был выключен в окно —
+    сводка пропускается, догоняющих сообщений нет."""
+    if not MORNING_SUMMARY_TIME:
+        return
+    hh, mm = (int(v) for v in MORNING_SUMMARY_TIME.split(":"))
+    target = (hh * 60 + mm) * 60  # секунды от полуночи
+    last_sent = None
+    while True:
+        try:
+            now = datetime.now(TZ)
+            secs = now.hour * 3600 + now.minute * 60 + now.second
+            if (SEMESTER_START <= now.date() <= SEMESTER_END
+                    and target <= secs < target + 90 * 60
+                    and last_sent != now.date()):
+                await send(tg, OWNER_ID, morning_text(now.date()), parse_mode="HTML")
+                last_sent = now.date()
+                logging.info("morning summary sent")
+        except Exception:
+            logging.exception("morning summary failed")
+        await asyncio.sleep(60)
+
+
 async def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     timeout = aiohttp.ClientTimeout(total=40)  # long poll 25 с + запас на запрос
@@ -416,6 +454,7 @@ async def main():
             pass
         logging.info("Start polling")
         asyncio.create_task(renewal_watchdog(http, tg))
+        asyncio.create_task(morning_summary(http, tg))
         offset = 0
         while True:
             try:
