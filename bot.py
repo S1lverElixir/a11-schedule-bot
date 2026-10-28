@@ -121,7 +121,7 @@ def now_text():
     now = datetime.now(TZ)
     d = now.date()
     minutes = now.hour * 60 + now.minute
-    head = f"<b>Сейчас {now:%H:%M}, {WD_FULL[d.weekday()]} {d:%d.%m}</b>\nНеделя {week_mark(d)} чертой"
+    head = f"<b>Сейчас {now:%H:%M} · {WD_FULL[d.weekday()]}, {d:%d.%m}</b>\nНеделя {week_mark(d)} чертой"
     pairs = day_pairs(d)
     if not pairs:
         text = f"{head}\n\n<i>сегодня пар нет</i>"
@@ -312,6 +312,7 @@ class Telegram:
         if caption:
             form.add_field("caption", caption, content_type="text/plain; charset=utf-8",
                            **{"Content-Type": None})
+            form.add_field("parse_mode", "HTML")
         form.add_field("document", content, filename=filename,
                        content_type="text/calendar")
         async with self._http.post(f"{self._base}/sendDocument", data=form) as resp:
@@ -354,7 +355,7 @@ async def on_callback(tg, cb):
         monday = date(y, m, d)
         name = f"raspisanie_{monday:%d.%m}-{monday + timedelta(days=6):%d.%m}.ics"
         await tg.send_document(chat_id, name, ics_for_week(monday),
-                               caption=f"Неделя {monday:%d.%m}–{monday + timedelta(days=6):%d.%m} · {week_mark(monday)} чертой")
+                               caption=f"<b>Неделя {monday:%d.%m}–{monday + timedelta(days=6):%d.%m} · {week_mark(monday)} чертой</b>")
 
 
 async def on_message(tg, msg):
