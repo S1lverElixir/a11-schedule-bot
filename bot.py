@@ -154,10 +154,11 @@ def now_text():
         nxt = next_day_first_pair(d)
         if nxt:
             nd, first = nxt
-            text += (f"\n\nзавтра: {first[0]}-я пара в {first[1]} — {html.escape(first[3])}"
-                     if (nd - d).days == 1 else
-                     f"\n\nближайшая пара: {WD_FULL[nd.weekday()].lower()}, {nd:%d.%m}, "
-                     f"{first[0]}-я в {first[1]} — {html.escape(first[3])}")
+            hint = (f"завтра: {first[0]}-я пара в {first[1]} — {html.escape(first[3])}"
+                    if (nd - d).days == 1 else
+                    f"ближайшая пара: {WD_FULL[nd.weekday()].lower()}, {nd:%d.%m}, "
+                    f"{first[0]}-я в {first[1]} — {html.escape(first[3])}")
+            text += f"\n\n<blockquote>{hint}</blockquote>"
     else:
         head += "\n" + day_span_block(pairs, minutes)
         running = next((e for e in pairs if hm(e[1]) <= minutes < hm(e[2])), None)
@@ -167,8 +168,9 @@ def now_text():
             text = head + "\n\n" + pair_block(running) + f"\n<i>до конца {hm(running[2]) - minutes} мин</i>"
             if i + 1 < len(pairs):
                 nxt = pairs[i + 1]
-                text += (f"\n\nдальше: {nxt[0]}-я пара в {nxt[1]} — "
-                         f"{html.escape(nxt[3])}" + (f", ауд. {nxt[4]}" if nxt[4] else ""))
+                hint = (f"дальше: {nxt[0]}-я пара в {nxt[1]} — "
+                        f"{html.escape(nxt[3])}" + (f", ауд. {nxt[4]}" if nxt[4] else ""))
+                text += f"\n\n<blockquote>{hint}</blockquote>"
         elif upcoming is not None:
             gap = hm(upcoming[1]) - minutes
             label = "до первой пары" if upcoming is pairs[0] else "перемена"
@@ -178,10 +180,11 @@ def now_text():
             nxt = next_day_first_pair(d)
             if nxt:
                 nd, first = nxt
-                text += (f"\n\nзавтра: {first[0]}-я пара в {first[1]} — {html.escape(first[3])}"
-                         if (nd - d).days == 1 else
-                         f"\n\nближайшая пара: {WD_FULL[nd.weekday()].lower()}, {nd:%d.%m}, "
-                         f"{first[0]}-я в {first[1]} — {html.escape(first[3])}")
+                hint = (f"завтра: {first[0]}-я пара в {first[1]} — {html.escape(first[3])}"
+                        if (nd - d).days == 1 else
+                        f"ближайшая пара: {WD_FULL[nd.weekday()].lower()}, {nd:%d.%m}, "
+                        f"{first[0]}-я в {first[1]} — {html.escape(first[3])}")
+                text += f"\n\n<blockquote>{hint}</blockquote>"
     return text
 
 
@@ -204,13 +207,13 @@ def pairs_word(n):
 
 
 def render_week(monday):
-    """Компактная неделя от заданного понедельника (HTML: шапка жирным)."""
+    """Компактная неделя от заданного понедельника (HTML: шапка и дни жирным)."""
     lines = [f"<b>Неделя {monday:%d.%m}–{monday + timedelta(days=6):%d.%m} · {week_mark(monday)} чертой</b>"]
     for i in range(7):
         day = monday + timedelta(days=i)
         pairs = day_pairs(day)
         lines.append("")
-        lines.append(f"{WD_SHORT[i]} {day:%d.%m}")
+        lines.append(f"<b>{WD_SHORT[i]} {day:%d.%m}</b>")
         if not pairs:
             lines.append("пар нет")
             continue
