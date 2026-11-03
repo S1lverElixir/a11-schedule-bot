@@ -24,6 +24,8 @@ fn load_dotenv() {
         Ok(t) => t,
         Err(_) => return,
     };
+    // BOM бывает у .env, отредактированного блокнотом в UTF-8 с BOM
+    let text = text.trim_start_matches('\u{feff}');
     for line in text.lines() {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
@@ -136,12 +138,13 @@ fn main() {
 }
 
 /// Проверка канала до Telegram без отправки сообщений: токен принимается или нет.
-/// Ничего не пишет в чат, токен не печатает.
+/// Ничего не пишет в чат, токен не печатает. На хосте токен живёт в .env, как у Python-бота.
 fn check_net() {
+    load_dotenv();
     let token = match std::env::var("BOT_TOKEN") {
         Ok(t) => t,
         Err(_) => {
-            println!("канал: нет BOT_TOKEN в окружении");
+            println!("канал: нет BOT_TOKEN ни в окружении, ни в .env");
             std::process::exit(1);
         }
     };
