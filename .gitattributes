@@ -1,0 +1,7 @@
+# Снимки и скрипты сравниваются побайтно: переводы строк не должны зависеть от ОС
+*.json text eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+*.rs text eol=lf
+*.toml text eol=lf
+*.md text eol=lf

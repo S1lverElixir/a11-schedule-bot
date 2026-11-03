@@ -4,6 +4,7 @@
 - A personal Telegram schedule bot for group А-11 of БТЭУ (Gomel). One user, the owner; everyone else gets silence. Bot text is Russian and restrained.
 - It runs 24/7 in a free fps.ms container with a hard 128 MB RAM limit and is renewed by hand every day.
 - `bot.py` is the whole bot: aiohttp transport with long polling, render functions that never touch the network, handlers, two background tasks (`renewal_watchdog`, `morning_summary`), the poll loop.
+- `rust/` is the same bot rewritten in Rust (same texts byte for byte, 5–8 MB instead of 40). `bot.py` stays the running bot and the reference until the host is switched; the switch is an owner decision, not a refactor.
 - `schedule_data.py` is the only source of schedule facts (`SCHEDULE`, `KIND`, `BELLS`, `SEMESTER_START`/`END`, `ANCHOR_MONDAY`, `week_mark`; the record format is in its docstring). `bot.py` only renders and serves it.
 - `SPEC.md` is the behavior contract. It wins on behavior, this file wins on process; the owner's task overrides both, except Approvals, Secrets and Hard constraints.
 - `run.py` (protected) bootstraps the host: on a container without `.git` it does init + fetch + reset, installs from `wheels/` offline when the packages are missing, then execs `bot.py`. The `git pull` on normal starts is the host's.
@@ -44,12 +45,21 @@ pip install -r requirements.txt        # once per machine
 python -X utf8 bot.py                  # local run; never with the production token
 python -X utf8 .agents/skills/verify-bot/scripts/verify_bot.py --local   # gate, offline
 python -X utf8 .agents/skills/verify-bot/scripts/verify_bot.py           # gate plus prod checks
+python -X utf8 rust/tools/check.py                                       # Rust gate: build, parity, memory
+cd rust; cargo test                                                      # the same without the Python wrapper
 gh run list --workflow=deploy.yml --limit 1                              # last deploy
 git push origin main                   # only when the owner asked in this task
 ```
 - The shell is PowerShell: no `grep`, no `tail`, no `*.py` glob expansion for commands. Search with the read/glob/grep tools, or `Select-String`/`Get-Content` in the shell.
 - The gate prints `ЛОКАЛЬНО` and `ПРОД` sections of `[OK]/[WARN]/[FAIL]` and exits 1 on any FAIL.
 - The test path is the render functions, never a live send into the owner's chat.
+
+## Rust port (`rust/`)
+- `rust/` mirrors `bot.py` feature for feature: `render.rs`/`ics.rs` are pure and never touch the network, `telegram.rs` is the transport (blocking ureq + rustls, no async runtime), `bot.rs` holds handlers and both background tasks.
+- Parity is byte-exact against two fixtures: `views.json` (7599 frozen views) and `handlers.json` (69 frozen handler calls, checked through a recording stub of the API). If a fixture and the Python bot disagree, regenerate the fixture (`gen_views.py` / `gen_handlers.py`) — never edit the test or the texts to match.
+- Data lives in `rust/src/schedule.rs`; a semester change touches it as well, and the fixture is regenerated in the same commit.
+- `cargo test` green and `check.py` printing `ИТОГ: FAIL=0` are required before a Rust commit; the Python gate says nothing about Rust.
+- `a11-bot --selftest 2` prints a deterministic hash and peak memory, `--check-net` only calls `getMe` (no message is sent). Never run either with the production token in a report, and never run the bot itself live without a direct request.
 
 ## Gate
 - Run `--local` before the first change and after each batch; run the full gate before a push and when the owner asks for a health check.

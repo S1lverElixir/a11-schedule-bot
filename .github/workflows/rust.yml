@@ -1,0 +1,55 @@
+name: rust-build
+
+# Сборка бота на Rust: статический бинарник для хостинга, тесты и замер памяти.
+# Рабочий деплой живёт в deploy.yml и здесь не меняется.
+
+on:
+  push:
+    branches: [main]
+    paths: ["rust/**", ".github/workflows/rust.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - name: инструменты musl
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: тесты и паритет
+        run: cargo test --manifest-path rust/Cargo.toml
+
+      - name: статический бинарник
+        env:
+          CC_x86_64_unknown_linux_musl: musl-gcc
+        run: cargo build --release --manifest-path rust/Cargo.toml --target x86_64-unknown-linux-musl
+
+      - name: проверка бинарника и памяти на Linux
+        run: |
+          BIN=rust/target/x86_64-unknown-linux-musl/release/a11-bot
+          file "$BIN"
+          ls -l "$BIN"
+          "$BIN" --selftest 2
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: a11-bot-linux-musl
+          path: rust/target/x86_64-unknown-linux-musl/release/a11-bot
+
+      - name: скользящий релиз rust-latest
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: rust-latest
+          name: rust-latest
+          body: "Текущая сборка бота расписания А-11 на Rust"
+          files: rust/target/x86_64-unknown-linux-musl/release/a11-bot
+          prerelease: true
