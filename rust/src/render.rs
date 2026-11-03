@@ -3,7 +3,7 @@
 //! Форматы перенесены из bot.py один в один (SPEC.md — контракт), поэтому даже
 //! отступы и тире здесь менять нельзя: parity-тест сравнивает байт-в-байт.
 
-use crate::date::{Now, Date, MONTHS, WD_FULL, WD_SHORT, wd_lower};
+use crate::date::{wd_lower, Date, Now, MONTHS, WD_FULL, WD_SHORT};
 use crate::schedule::{day_pairs, kind, week_label, Pair, BELLS, SEMESTER_END, SEMESTER_START};
 use serde_json::{json, Value};
 
@@ -79,7 +79,9 @@ fn subject_title(subj: &str) -> String {
 /// note — курсивная приписка (для идущей пары).
 fn pair_block(p: &Pair, note: Option<&str>) -> String {
     let second = match p.rooms {
-        Some(r) if !r.is_empty() => format!("{}, ауд. {}", subject_title(p.subj), fmt_rooms(Some(r))),
+        Some(r) if !r.is_empty() => {
+            format!("{}, ауд. {}", subject_title(p.subj), fmt_rooms(Some(r)))
+        }
         _ => subject_title(p.subj),
     };
     let teachers = esc(&p.teachers.join(", "));
@@ -97,10 +99,7 @@ fn pair_block(p: &Pair, note: Option<&str>) -> String {
 
 /// Границы учебного дня в минутах — от первой до последней пары.
 fn day_span(pairs: &[&Pair]) -> (u32, u32) {
-    (
-        hm(pairs[0].start),
-        hm(pairs[pairs.len() - 1].end),
-    )
+    (hm(pairs[0].start), hm(pairs[pairs.len() - 1].end))
 }
 
 /// Округление половины к чётному, как `round()` в Python.
@@ -143,11 +142,7 @@ fn status_line(pairs: &[&Pair], now: u32) -> String {
             if i == 0 {
                 return format!("до первой пары {}", fmt_minutes(s - now));
             }
-            return format!(
-                "перемена, до {}-й пары {}",
-                p.num,
-                fmt_minutes(s - now)
-            );
+            return format!("перемена, до {}-й пары {}", p.num, fmt_minutes(s - now));
         }
         if now < e {
             return format!("идёт {}-я пара, до конца {}", p.num, fmt_minutes(e - now));
@@ -187,7 +182,11 @@ pub fn day_text(d: Date, suffix: &str, now: Now) -> String {
     let mut text = head;
     let blocks: Vec<String> = match status.as_deref() {
         None => pairs.iter().map(|p| pair_block(p, None)).collect(),
-        Some(st) if st == "занятия окончены" || st.starts_with("перемена") || st.starts_with("до первой") => {
+        Some(st)
+            if st == "занятия окончены"
+                || st.starts_with("перемена")
+                || st.starts_with("до первой") =>
+        {
             text.push_str("\n\n<i>");
             text.push_str(st);
             text.push_str("</i>");
@@ -306,7 +305,11 @@ pub fn now_text(now: Now) -> String {
     if let Some(i) = upcoming {
         let p = pairs[i];
         let gap = hm(p.start) - now.minute;
-        let label = if i == 0 { "до первой пары" } else { "перемена" };
+        let label = if i == 0 {
+            "до первой пары"
+        } else {
+            "перемена"
+        };
         return format!(
             "{head}\n\n<i>{label} {}</i>\n\n{}",
             fmt_minutes(gap),
@@ -347,10 +350,18 @@ pub fn render_week(monday: Date, now: Now) -> String {
     for (wd, ds) in merged {
         lines.push(String::new());
         if ds.len() == 1 {
-            let mark = if ds[0] == today { " · сегодня" } else { "" };
+            let mark = if ds[0] == today {
+                " · сегодня"
+            } else {
+                ""
+            };
             lines.push(format!("<b>{wd} {}</b>{}", ds[0].fmt_dm(), mark));
         } else {
-            lines.push(format!("<b>{wd} {} · {}</b>", ds[0].fmt_dm(), ds[1].fmt_dm()));
+            lines.push(format!(
+                "<b>{wd} {} · {}</b>",
+                ds[0].fmt_dm(),
+                ds[1].fmt_dm()
+            ));
         }
         let pairs = day_pairs(ds[0]);
         if pairs.is_empty() {
@@ -369,7 +380,11 @@ pub fn render_week(monday: Date, now: Now) -> String {
                 _ => lines.push(format!("{} ({}) {title}", p.num, p.start)),
             }
         }
-        lines.push(format!("<i>{} {}</i>", pairs.len(), pairs_word(pairs.len() as u32)));
+        lines.push(format!(
+            "<i>{} {}</i>",
+            pairs.len(),
+            pairs_word(pairs.len() as u32)
+        ));
     }
     lines.join("\n")
 }
@@ -520,7 +535,10 @@ pub fn morning_text(d: Date, now: Now) -> String {
     let gap = hm(pairs[0].start) as i64 - now.minute as i64;
     let mut info = day_span_block(&pairs, Some(now.minute));
     if gap > 0 {
-        info.push_str(&format!("\n<i>до первой пары {}</i>", fmt_minutes(gap as u32)));
+        info.push_str(&format!(
+            "\n<i>до первой пары {}</i>",
+            fmt_minutes(gap as u32)
+        ));
     }
     let mut lines = Vec::with_capacity(pairs.len());
     for p in &pairs {

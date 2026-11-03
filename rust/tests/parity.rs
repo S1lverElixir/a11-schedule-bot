@@ -21,23 +21,19 @@ fn now_at(d: Date, hhmm: &str) -> Now {
 }
 
 fn date_of(s: &str) -> Date {
-    Date::parse_iso(s).or_else(|| {
-        // неделя в снимках записана как YYYY-MM-DD, как и всё остальное
-        None
-    }).unwrap_or_else(|| panic!("дата {s:?}"))
+    Date::parse_iso(s)
+        .or_else(|| {
+            // неделя в снимках записана как YYYY-MM-DD, как и всё остальное
+            None
+        })
+        .unwrap_or_else(|| panic!("дата {s:?}"))
 }
 
 fn rows_value(kb: &InlineKb) -> Value {
     Value::Array(
         kb.rows
             .iter()
-            .map(|row| {
-                Value::Array(
-                    row.iter()
-                        .map(|(t, c)| json!({"t": t, "c": c}))
-                        .collect(),
-                )
-            })
+            .map(|row| Value::Array(row.iter().map(|(t, c)| json!({"t": t, "c": c})).collect()))
             .collect(),
     )
 }
@@ -152,7 +148,11 @@ fn short(v: &Value) -> String {
 fn every_view_matches_python_bot_byte_for_byte() {
     let doc: Value = serde_json::from_str(FIXTURE).expect("фикстура — это JSON");
     let cases = doc["cases"].as_array().expect("cases");
-    assert!(cases.len() > 7000, "снимков подозрительно мало: {}", cases.len());
+    assert!(
+        cases.len() > 7000,
+        "снимков подозрительно мало: {}",
+        cases.len()
+    );
     let mut checked = 0usize;
     let mut failed = 0usize;
     let mut failures: Vec<String> = Vec::new();

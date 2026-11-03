@@ -77,7 +77,11 @@ fn short(v: &Value) -> String {
 fn handlers_make_the_same_calls_as_python_bot() {
     let doc: Value = serde_json::from_str(FIXTURE).expect("фикстура — JSON");
     let cases = doc["cases"].as_array().expect("cases");
-    assert!(cases.len() >= 60, "случаев подозрительно мало: {}", cases.len());
+    assert!(
+        cases.len() >= 60,
+        "случаев подозрительно мало: {}",
+        cases.len()
+    );
     let mut failed: Vec<String> = Vec::new();
     let mut failed_count = 0usize;
     for case in cases {

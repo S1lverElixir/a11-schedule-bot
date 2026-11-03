@@ -139,7 +139,10 @@ def main():
         or (Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "handlers.json")
     )
     payload = {"generator": "rust/tools/gen_handlers.py", "cases": CASES}
-    out.write_text(json.dumps(payload, ensure_ascii=False, indent=0), encoding="utf-8")
+    # Переводы строк только LF: хеш снимков не должен зависеть от ОС
+    out.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=0), encoding="utf-8", newline="\n"
+    )
     print(f"случаев: {len(CASES)}, файл: {out} ({out.stat().st_size / 1024:.0f} КиБ)")
 
 

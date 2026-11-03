@@ -38,6 +38,9 @@ mod tests {
     fn secret_is_replaced() {
         // отдельный процесс не нужен: проверяем саму замену строки
         let msg = "url https://api.telegram.org/bot123:ABC/x";
-        assert_eq!(msg.replace("123:ABC", "***"), "url https://api.telegram.org/bot***/x");
+        assert_eq!(
+            msg.replace("123:ABC", "***"),
+            "url https://api.telegram.org/bot***/x"
+        );
     }
 }

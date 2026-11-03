@@ -61,8 +61,7 @@ impl Config {
         Ok(Config {
             token,
             owner_id,
-            morning: std::env::var("MORNING_SUMMARY_TIME")
-                .unwrap_or_else(|_| "07:30".to_string()),
+            morning: std::env::var("MORNING_SUMMARY_TIME").unwrap_or_else(|_| "07:30".to_string()),
             panel: PanelConfig {
                 api_key: std::env::var("FPSMS_API_KEY").unwrap_or_default(),
                 server: std::env::var("FPSMS_SERVER_UUID").unwrap_or_default(),
@@ -270,4 +269,3 @@ fn peak_rss_mb() -> Option<f64> {
 fn peak_rss_mb() -> Option<f64> {
     None
 }
-

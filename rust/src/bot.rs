@@ -154,7 +154,8 @@ impl<A: Api> Bot<A> {
                     };
                     self.send(chat_id, &render::day_text(d, "", now), None, Some("HTML"));
                 } else {
-                    let message_id = match cb.pointer("/message/message_id").and_then(Value::as_i64) {
+                    let message_id = match cb.pointer("/message/message_id").and_then(Value::as_i64)
+                    {
                         Some(v) => v,
                         None => return bad_data(data),
                     };
@@ -229,12 +230,16 @@ pub fn spawn_morning(tg: Arc<Telegram>, owner_id: i64, time: String) {
         Some((h, m)) => match (h.parse::<u32>(), m.parse::<u32>()) {
             (Ok(h), Ok(m)) if h < 24 && m < 60 => (h, m),
             _ => {
-                log::error(&format!("MORNING_SUMMARY_TIME {time:?} — не HH:MM, сводка выключена"));
+                log::error(&format!(
+                    "MORNING_SUMMARY_TIME {time:?} — не HH:MM, сводка выключена"
+                ));
                 return;
             }
         },
         None => {
-            log::error(&format!("MORNING_SUMMARY_TIME {time:?} — не HH:MM, сводка выключена"));
+            log::error(&format!(
+                "MORNING_SUMMARY_TIME {time:?} — не HH:MM, сводка выключена"
+            ));
             return;
         }
     };

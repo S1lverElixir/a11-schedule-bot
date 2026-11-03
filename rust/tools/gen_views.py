@@ -169,7 +169,10 @@ def main():
         "freeze_default": "2026-10-23T08:00:00+03:00",
         "cases": cases,
     }
-    out.write_text(json.dumps(payload, ensure_ascii=False, indent=0), encoding="utf-8")
+    # Переводы строк только LF: иначе хеш снимков зависит от ОС
+    out.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=0), encoding="utf-8", newline="\n"
+    )
     kinds = {}
     for c in cases:
         kinds[c["kind"]] = kinds.get(c["kind"], 0) + 1
