@@ -213,6 +213,17 @@ fn bad_data(data: &str) {
     log::warn(&format!("bad callback data: {data:?}"));
 }
 
+/// Текст напоминания о продлении: та же формулировка, что была у Python-бота,
+/// включая обрезанный UUID в ссылке и «не меньше часа» в остатке.
+pub fn reminder_text(hours_left: f64, panel_url: &str, server: &str) -> String {
+    let hours = (hours_left as i64).max(1);
+    let short_id = server.split('-').next().unwrap_or("");
+    format!(
+        "Напоминание: сервер fps.ms остановится примерно через {hours} ч. \
+         Продли сервер в панели (кнопка Add 24 hours): {panel_url}/server/{short_id}"
+    )
+}
+
 /// Настройки сторожа продления сервера.
 pub struct PanelConfig {
     pub api_key: String,
@@ -283,10 +294,7 @@ pub fn spawn_watchdog(tg: Arc<Telegram>, owner_id: i64, cfg: PanelConfig) {
     std::thread::Builder::new()
         .name("watchdog".to_string())
         .spawn(move || {
-            let url = format!(
-                "{}/api/client/servers/{}",
-                cfg.panel_url, cfg.server
-            );
+            let url = format!("{}/api/client/servers/{}", cfg.panel_url, cfg.server);
             let mut last_bucket: Option<&'static str> = None;
             loop {
                 let mut bucket: Option<&'static str> = None;
@@ -297,8 +305,7 @@ pub fn spawn_watchdog(tg: Arc<Telegram>, owner_id: i64, cfg: PanelConfig) {
                             .and_then(Value::as_str)
                             .and_then(parse_iso_datetime)
                         {
-                            let hours_left =
-                                (expires.unix() - Stamp::now().unix()) as f64 / 3600.0;
+                            let hours_left = (expires.unix() - Stamp::now().unix()) as f64 / 3600.0;
                             bucket = Some(if hours_left > 30.0 {
                                 "ok"
                             } else if hours_left > 6.0 {
@@ -307,16 +314,8 @@ pub fn spawn_watchdog(tg: Arc<Telegram>, owner_id: i64, cfg: PanelConfig) {
                                 "urgent"
                             });
                             if bucket != Some("ok") && bucket != last_bucket {
-                                let hours = (hours_left as i64).max(1);
-                                let short_id = cfg.server.split('-').next().unwrap_or("");
-                                let text = format!(
-                                    "Напоминание: сервер fps.ms остановится примерно через {hours} ч. \
-                                     Продли сервер в панели (кнопка Add 24 hours): {}/server/{}",
-                                    cfg.panel_url, short_id
-                                );
-                                if let Err(e) =
-                                    tg.send_message(owner_id, &text, None, None)
-                                {
+                                let text = reminder_text(hours_left, &cfg.panel_url, &cfg.server);
+                                if let Err(e) = tg.send_message(owner_id, &text, None, None) {
                                     log::error(&format!("watchdog send: {e}"));
                                 }
                             }
@@ -332,4 +331,24 @@ pub fn spawn_watchdog(tg: Arc<Telegram>, owner_id: i64, cfg: PanelConfig) {
             }
         })
         .expect("поток сторожа продления");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reminder_text_matches_python_bot() {
+        // строка снята с Python-бота при тех же входных данных, не переписывать «по смыслу»
+        assert_eq!(
+            reminder_text(5.7, "https://panel.fps.ms", "abc-def-123"),
+            "Напоминание: сервер fps.ms остановится примерно через 5 ч. \
+             Продли сервер в панели (кнопка Add 24 hours): https://panel.fps.ms/server/abc"
+        );
+    }
+
+    #[test]
+    fn reminder_never_says_zero_hours() {
+        assert!(reminder_text(0.4, "https://panel.fps.ms", "x").contains("через 1 ч"));
+    }
 }
