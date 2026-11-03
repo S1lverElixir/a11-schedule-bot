@@ -75,6 +75,10 @@ impl Config {
 }
 
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("--version") {
+        println!("a11-bot {}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
     if std::env::args().nth(1).as_deref() == Some("--selftest") {
         let iterations = std::env::args()
             .nth(2)
@@ -96,6 +100,8 @@ fn main() {
     };
     log::set_secret(&cfg.token);
     let tg = Arc::new(Telegram::new(&cfg.token));
+    // версию видно в консоли панели: по ней понятно, какой бинарник поднялся
+    log::info(&format!("a11-bot {} стартует", env!("CARGO_PKG_VERSION")));
 
     // на случай забытого webhook от прошлых экспериментов; сеть могла ещё не подняться
     match tg.call("deleteWebhook", &json!({})) {

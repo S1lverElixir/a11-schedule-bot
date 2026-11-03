@@ -3,11 +3,11 @@
 ## What this repo is
 - A personal Telegram schedule bot for group А-11 of БТЭУ (Gomel). One user, the owner; everyone else gets silence. Bot text is Russian and restrained.
 - It runs 24/7 in a free fps.ms container with a hard 128 MB RAM limit and is renewed by hand every day.
-- `bot.py` is the whole bot: aiohttp transport with long polling, render functions that never touch the network, handlers, two background tasks (`renewal_watchdog`, `morning_summary`), the poll loop.
-- `rust/` is the same bot rewritten in Rust (same texts byte for byte, 5–8 MB instead of 40). `bot.py` stays the running bot and the reference until the host is switched; the switch is an owner decision, not a refactor.
+- `bot.py` is the previous Python bot: the behavior reference for the parity fixtures and the rollback path, not the running bot.
+- `rust/` is the bot that runs in production. The host starts `run.py` (panel variable `PY_FILE=run.py`), which copies `rust/bin/a11-bot` to a temp dir and execs it; a failed self-test falls back to `bot.py`. `rust/bin/a11-bot` is a committed Linux binary and CI refreshes it on every `rust/**` push.
 - `schedule_data.py` is the only source of schedule facts (`SCHEDULE`, `KIND`, `BELLS`, `SEMESTER_START`/`END`, `ANCHOR_MONDAY`, `week_mark`; the record format is in its docstring). `bot.py` only renders and serves it.
 - `SPEC.md` is the behavior contract. It wins on behavior, this file wins on process; the owner's task overrides both, except Approvals, Secrets and Hard constraints.
-- `run.py` (protected) bootstraps the host: on a container without `.git` it does init + fetch + reset, installs from `wheels/` offline when the packages are missing, then execs `bot.py`. The `git pull` on normal starts is the host's.
+- `run.py` (protected) is the host entry, selected by the panel variable `PY_FILE=run.py`: on a container without `.git` it does init + fetch + reset, then copies `rust/bin/a11-bot` to a temp dir, self-tests it and execs it; any failure falls back to `bot.py`. The `git pull` on normal starts is the host's.
 - No database, no state files, no web server: state is in memory, so a restart is safe and loses only reminder and summary de-duplication.
 - `.agents/skills/verify-bot/` holds the checks. A skill grants no permissions: Approvals apply anyway.
 
@@ -60,6 +60,7 @@ git push origin main                   # only when the owner asked in this task
 - Data lives in `rust/src/schedule.rs`; a semester change touches it as well, and the fixture is regenerated in the same commit.
 - `cargo test` green and `check.py` printing `ИТОГ: FAIL=0` are required before a Rust commit; the Python gate says nothing about Rust.
 - `a11-bot --selftest 2` prints a deterministic hash and peak memory, `--check-net` only calls `getMe` (no message is sent). Never run either with the production token in a report, and never run the bot itself live without a direct request.
+- Deploy: a `rust/**` push makes CI build the musl binary, commit it as `rust/bin/a11-bot` and ask the panel to restart; the panel's own `deploy.yml` restart runs first, with the previous binary. Never `chmod` that file — a mode change blocks the host's `git pull`, which is how a push can silently keep old code. Local run: `rust\target\release\a11-bot.exe` with the same `.env`.
 
 ## Gate
 - Run `--local` before the first change and after each batch; run the full gate before a push and when the owner asks for a health check.
