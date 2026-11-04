@@ -96,9 +96,9 @@ impl<A: Api> Bot<A> {
             render::BTN_BELLS => self.send(chat_id, &render::bells_text(), None, Some("HTML")),
             _ => self.send(
                 chat_id,
-                "Выбери дату:",
+                render::PICK_PROMPT,
                 Some(render::calendar_kb(today.year(), today.month(), now).to_value()),
-                None,
+                Some("HTML"),
             ),
         }
     }

@@ -13,7 +13,8 @@ pub const BTN_NOW: &str = "Сейчас";
 pub const BTN_WEEK: &str = "Неделя";
 pub const BTN_BELLS: &str = "Звонки";
 pub const BTN_PICK: &str = "Выбрать день";
-pub const GREETING: &str = "Расписание группы А-11. Выбирай кнопкой ниже.";
+pub const GREETING: &str = "Расписание группы А-11. Выбирай кнопками ниже.";
+pub const PICK_PROMPT: &str = "<b>Выбери день</b>";
 
 /// Экранирование HTML как `html.escape(s)` в Python (включая кавычки).
 pub fn esc(s: &str) -> String {
@@ -37,12 +38,16 @@ pub fn hm(s: &str) -> u32 {
     h.parse::<u32>().expect("часы") * 60 + m.parse::<u32>().expect("минуты")
 }
 
-/// Интервал по-человечески: 45 → «45 мин», 95 → «1 ч 35 мин».
+/// Интервал по-человечески: 45 → «45 мин», 60 → «1 ч», 95 → «1 ч 35 мин».
 pub fn fmt_minutes(m: u32) -> String {
-    if m >= 60 {
-        format!("{} ч {} мин", m / 60, m % 60)
+    if m < 60 {
+        return format!("{m} мин");
+    }
+    let (h, rem) = (m / 60, m % 60);
+    if rem == 0 {
+        format!("{h} ч")
     } else {
-        format!("{m} мин")
+        format!("{h} ч {rem} мин")
     }
 }
 
@@ -336,6 +341,10 @@ pub fn render_week(monday: Date, now: Now) -> String {
         days[6].fmt_dm(),
         week_label(monday)
     )];
+    if counts.iter().all(|&c| c == 0) {
+        // неделя целиком вне семестра: семь «пар нет» — шум
+        return format!("{}\n\n<i>пар нет</i>", lines[0]);
+    }
     let mut merged: Vec<(&str, Vec<Date>)> = Vec::new();
     let mut i = 0;
     while i < 7 {
@@ -349,23 +358,23 @@ pub fn render_week(monday: Date, now: Now) -> String {
     }
     for (wd, ds) in merged {
         lines.push(String::new());
+        let mark = if ds.iter().any(|d| *d == today) {
+            " · сегодня"
+        } else {
+            ""
+        };
         if ds.len() == 1 {
-            let mark = if ds[0] == today {
-                " · сегодня"
-            } else {
-                ""
-            };
-            lines.push(format!("<b>{wd} {}</b>{}", ds[0].fmt_dm(), mark));
+            lines.push(format!("<b>{wd} {}{mark}</b>", ds[0].fmt_dm()));
         } else {
             lines.push(format!(
-                "<b>{wd} {} · {}</b>",
+                "<b>{wd} {} · {}{mark}</b>",
                 ds[0].fmt_dm(),
                 ds[1].fmt_dm()
             ));
         }
         let pairs = day_pairs(ds[0]);
         if pairs.is_empty() {
-            lines.push("пар нет".to_string());
+            lines.push("<i>пар нет</i>".to_string());
             continue;
         }
         for p in &pairs {
@@ -536,7 +545,7 @@ pub fn morning_text(d: Date, now: Now) -> String {
     let mut info = day_span_block(&pairs, Some(now.minute));
     if gap > 0 {
         info.push_str(&format!(
-            "\n<i>до первой пары {}</i>",
+            "\n\n<i>до первой пары {}</i>",
             fmt_minutes(gap as u32)
         ));
     }
@@ -577,5 +586,13 @@ mod tests {
     #[test]
     fn escaping_matches_python_html_escape() {
         assert_eq!(esc("a&b<c>d\"e'f"), "a&amp;b&lt;c&gt;d&quot;e&#x27;f");
+    }
+
+    #[test]
+    fn minutes_without_remainder_have_no_zero_tail() {
+        assert_eq!(fmt_minutes(45), "45 мин");
+        assert_eq!(fmt_minutes(60), "1 ч");
+        assert_eq!(fmt_minutes(120), "2 ч");
+        assert_eq!(fmt_minutes(95), "1 ч 35 мин");
     }
 }

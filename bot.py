@@ -52,7 +52,8 @@ BTN_BELLS = "Звонки"
 BTN_PICK = "Выбрать день"
 BUTTONS = {BTN_TODAY, BTN_TOMORROW, BTN_NOW, BTN_WEEK, BTN_BELLS, BTN_PICK}
 
-GREETING = "Расписание группы А-11. Выбирай кнопкой ниже."
+GREETING = "Расписание группы А-11. Выбирай кнопками ниже."
+PICK_PROMPT = "<b>Выбери день</b>"
 
 
 def main_kb():
@@ -77,8 +78,11 @@ def day_pairs(d):
 
 
 def fmt_minutes(m):
-    """Интервал по-человечески: 45 -> «45 мин», 95 -> «1 ч 35 мин»."""
-    return f"{m // 60} ч {m % 60} мин" if m >= 60 else f"{m} мин"
+    """Интервал по-человечески: 45 -> «45 мин», 60 -> «1 ч», 95 -> «1 ч 35 мин»."""
+    if m < 60:
+        return f"{m} мин"
+    h, rem = divmod(m, 60)
+    return f"{h} ч {rem} мин" if rem else f"{h} ч"
 
 
 def status_line(pairs, now):
@@ -242,6 +246,9 @@ def render_week(monday):
     days = [monday + timedelta(days=i) for i in range(7)]
     counts = [len(day_pairs(d)) for d in days]
     lines = [f"<b>Неделя {monday:%d.%m}–{days[6]:%d.%m} · {week_mark(monday)} чертой</b>"]
+    if not any(counts):
+        # неделя целиком вне семестра: семь «пар нет» — шум
+        return lines[0] + "\n\n<i>пар нет</i>"
     merged = []
     i = 0
     while i < 7:
@@ -253,13 +260,14 @@ def render_week(monday):
             i += 1
     for wd, ds in merged:
         lines.append("")
+        mark = " · сегодня" if today in ds else ""
         if len(ds) == 1:
-            lines.append(f"<b>{wd} {ds[0]:%d.%m}</b>" + (" · сегодня" if ds[0] == today else ""))
+            lines.append(f"<b>{wd} {ds[0]:%d.%m}{mark}</b>")
         else:
-            lines.append(f"<b>{wd} {ds[0]:%d.%m} · {ds[1]:%d.%m}</b>")
+            lines.append(f"<b>{wd} {ds[0]:%d.%m} · {ds[1]:%d.%m}{mark}</b>")
         count = len(day_pairs(ds[0]))
         if count == 0:
-            lines.append("пар нет")
+            lines.append("<i>пар нет</i>")
             continue
         for num, st, _en, subj, rooms, _t, _w in day_pairs(ds[0]):
             title = (f"{KIND.get(subj, '')} · {html.escape(subj)}" if KIND.get(subj)
@@ -395,7 +403,7 @@ def morning_text(d):
     gap = hm(pairs[0][1]) - mins
     info = day_span_block(pairs, mins)
     if gap > 0:  # до первой пары; если сводка пришла позже старта — строка отсчёта не нужна
-        info += f"\n<i>до первой пары {fmt_minutes(gap)}</i>"
+        info += f"\n\n<i>до первой пары {fmt_minutes(gap)}</i>"
     lines = []
     for num, st, _en, subj, rooms, _t, _w in pairs:
         title = (f"{KIND.get(subj, '')} · {html.escape(subj)}" if KIND.get(subj)
@@ -499,7 +507,8 @@ async def on_message(tg, msg):
     elif text == BTN_BELLS:
         await send(tg, chat_id, bells_text(), parse_mode="HTML")
     else:  # BTN_PICK — сетка текущего месяца
-        await send(tg, chat_id, "Выбери дату:", calendar_kb(today.year, today.month))
+        await send(tg, chat_id, PICK_PROMPT, calendar_kb(today.year, today.month),
+                   parse_mode="HTML")
 
 
 async def handle_update(tg, update):
