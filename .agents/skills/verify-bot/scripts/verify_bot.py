@@ -319,7 +319,8 @@ def check_panel(env):
         up = res.get("uptime")
         state = a.get("current_state")
         suspended = a.get("is_suspended")
-        up_txt = f", uptime {up / 3600:.1f} ч" if up is not None else ""
+        # панель отдаёт uptime в миллисекундах: 10 часов — это ~36 000 000, а не 36 000
+        up_txt = f", uptime {up / 3_600_000:.1f} ч" if up is not None else ""
         if state == "running" and not suspended:
             ok(f"контейнер running, память {mem:.0f} МБ{up_txt}")
         else:
