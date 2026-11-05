@@ -62,10 +62,14 @@ pub fn ics_for_week(monday: Date, stamp: Stamp) -> Vec<u8> {
             out.push(format!("DTEND:{}T{}", day.fmt_compact(), t(p.end)));
             out.push(format!("SUMMARY:{}", ics_escape(p.subj)));
             out.push(format!("LOCATION:{}", ics_escape(p.rooms.unwrap_or(""))));
-            out.push(format!(
-                "DESCRIPTION:{}",
-                ics_escape(&p.teachers.join(", "))
-            ));
+            let mut description = p.teachers.join(", ");
+            if p.sub {
+                if !description.is_empty() {
+                    description.push(' ');
+                }
+                description.push_str("замена");
+            }
+            out.push(format!("DESCRIPTION:{}", ics_escape(&description)));
             out.push("END:VEVENT".to_string());
         }
     }

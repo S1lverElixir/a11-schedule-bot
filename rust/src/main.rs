@@ -91,6 +91,16 @@ fn main() {
         check_net();
         return;
     }
+    // Пересъёмка эталона видов: --dump-views [файл]. Без файла — в stdout.
+    if std::env::args().nth(1).as_deref() == Some("--dump-views") {
+        dump_views();
+        return;
+    }
+    // Машинный дамп самих данных: для сверки с файлами bteu.by.
+    if std::env::args().nth(1).as_deref() == Some("--dump-schedule") {
+        println!("{}", a11_bot::schedule::dump_json());
+        return;
+    }
     let cfg = match Config::load() {
         Ok(c) => c,
         Err(e) => {
@@ -165,6 +175,21 @@ fn check_net() {
             println!("канал: ошибка {e}");
             std::process::exit(1);
         }
+    }
+}
+
+/// Пересъёмка эталона видов: `--dump-views [файл]`. Нужна после осознанной смены
+/// данных или текстов — Python-генераторов больше нет, эталон строит сам бот.
+fn dump_views() {
+    let doc = a11_bot::snapshot::snapshot_document();
+    let cases = doc["cases"].as_array().map(|v| v.len()).unwrap_or(0);
+    let text = serde_json::to_string_pretty(&doc).expect("эталон сериализуется");
+    match std::env::args().nth(2) {
+        Some(path) => {
+            std::fs::write(&path, format!("{text}\n")).expect("записать файл эталона");
+            println!("эталон: {path}, случаев: {cases}");
+        }
+        None => println!("{text}"),
     }
 }
 

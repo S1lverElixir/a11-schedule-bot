@@ -91,8 +91,11 @@ fn pair_block(p: &Pair, note: Option<&str>) -> String {
     };
     let teachers = esc(&p.teachers.join(", "));
     let mut text = format!(
-        "<b>{}-я пара {}–{}</b>\n{second}\n{teachers}",
-        p.num, p.start, p.end
+        "<b>{}-я пара {}–{}</b>{}\n{second}\n{teachers}",
+        p.num,
+        p.start,
+        p.end,
+        if p.sub { "<i> · замена</i>" } else { "" }
     );
     if let Some(note) = note {
         text.push_str("\n<i>");
@@ -103,7 +106,7 @@ fn pair_block(p: &Pair, note: Option<&str>) -> String {
 }
 
 /// Границы учебного дня в минутах — от первой до последней пары.
-fn day_span(pairs: &[&Pair]) -> (u32, u32) {
+fn day_span(pairs: &[Pair]) -> (u32, u32) {
     (hm(pairs[0].start), hm(pairs[pairs.len() - 1].end))
 }
 
@@ -119,7 +122,7 @@ fn round_half_even(num: i64, den: i64) -> i64 {
 }
 
 /// 10-клеточный прогресс учебного дня: ▰ пройдено, ▱ осталось.
-fn progress_bar(pairs: &[&Pair], minutes: u32) -> String {
+fn progress_bar(pairs: &[Pair], minutes: u32) -> String {
     let (s, e) = day_span(pairs);
     let raw = (minutes as i64 - s as i64) * 10;
     let filled = round_half_even(raw, (e as i64 - s as i64).max(1)).clamp(0, 10) as usize;
@@ -131,7 +134,7 @@ fn progress_bar(pairs: &[&Pair], minutes: u32) -> String {
 }
 
 /// Диапазон дня «пары HH:MM–HH:MM»; для сегодня — с прогресс-баром в code-блоке.
-fn day_span_block(pairs: &[&Pair], minutes_now: Option<u32>) -> String {
+fn day_span_block(pairs: &[Pair], minutes_now: Option<u32>) -> String {
     let rng = format!("пары {}–{}", pairs[0].start, pairs[pairs.len() - 1].end);
     match minutes_now {
         Some(m) => format!("<code>{}\n{rng}</code>", progress_bar(pairs, m)),
@@ -140,7 +143,7 @@ fn day_span_block(pairs: &[&Pair], minutes_now: Option<u32>) -> String {
 }
 
 /// Статус сегодняшнего дня; границы: момент начала пары — уже пара, конец — уже перемена.
-fn status_line(pairs: &[&Pair], now: u32) -> String {
+fn status_line(pairs: &[Pair], now: u32) -> String {
     for (i, p) in pairs.iter().enumerate() {
         let (s, e) = (hm(p.start), hm(p.end));
         if now < s {
@@ -221,12 +224,12 @@ pub fn day_text(d: Date, suffix: &str, now: Now) -> String {
 }
 
 /// Первая пара ближайшего дня с парами в пределах недели вперёд.
-fn next_day_first_pair(after: Date) -> Option<(Date, &'static Pair)> {
+fn next_day_first_pair(after: Date) -> Option<(Date, Pair)> {
     for i in 1..8 {
         let d = after.add_days(i);
         let pairs = day_pairs(d);
         if let Some(first) = pairs.first() {
-            return Some((d, first));
+            return Some((d, *first));
         }
     }
     None
@@ -272,7 +275,7 @@ pub fn now_text(now: Now) -> String {
         let mut text = format!("{head}\n\n<i>сегодня пар нет</i>");
         if let Some((nd, first)) = next_day_first_pair(d) {
             text.push_str("\n\n<blockquote>");
-            text.push_str(&next_pair_hint(d, nd, first));
+            text.push_str(&next_pair_hint(d, nd, &first));
             text.push_str("</blockquote>");
         }
         return text;
@@ -289,7 +292,7 @@ pub fn now_text(now: Now) -> String {
         let p = pairs[i];
         let mut text = format!(
             "{head}\n\n{}\n<i>до конца {}</i>",
-            pair_block(p, None),
+            pair_block(&p, None),
             fmt_minutes(hm(p.end) - now.minute)
         );
         if i + 1 < pairs.len() {
@@ -318,13 +321,13 @@ pub fn now_text(now: Now) -> String {
         return format!(
             "{head}\n\n<i>{label} {}</i>\n\n{}",
             fmt_minutes(gap),
-            pair_block(p, None)
+            pair_block(&p, None)
         );
     }
     let mut text = format!("{head}\n\n<i>занятия окончены</i>");
     if let Some((nd, first)) = next_day_first_pair(d) {
         text.push_str("\n\n<blockquote>");
-        text.push_str(&next_pair_hint(d, nd, first));
+        text.push_str(&next_pair_hint(d, nd, &first));
         text.push_str("</blockquote>");
     }
     text
@@ -379,14 +382,15 @@ pub fn render_week(monday: Date, now: Now) -> String {
         }
         for p in &pairs {
             let title = subject_title(p.subj);
+            let tail = if p.sub { " · замена" } else { "" };
             match p.rooms {
                 Some(r) if !r.is_empty() => lines.push(format!(
-                    "{} ({}) {title}, ауд. {}",
+                    "{} ({}) {title}, ауд. {}{tail}",
                     p.num,
                     p.start,
                     fmt_rooms(Some(r))
                 )),
-                _ => lines.push(format!("{} ({}) {title}", p.num, p.start)),
+                _ => lines.push(format!("{} ({}) {title}{tail}", p.num, p.start)),
             }
         }
         lines.push(format!(
@@ -552,14 +556,15 @@ pub fn morning_text(d: Date, now: Now) -> String {
     let mut lines = Vec::with_capacity(pairs.len());
     for p in &pairs {
         let title = subject_title(p.subj);
+        let tail = if p.sub { " · замена" } else { "" };
         match p.rooms {
             Some(r) if !r.is_empty() => lines.push(format!(
-                "{} ({}) {title}, ауд. {}",
+                "{} ({}) {title}, ауд. {}{tail}",
                 p.num,
                 p.start,
                 fmt_rooms(Some(r))
             )),
-            _ => lines.push(format!("{} ({}) {title}", p.num, p.start)),
+            _ => lines.push(format!("{} ({}) {title}{tail}", p.num, p.start)),
         }
     }
     format!(

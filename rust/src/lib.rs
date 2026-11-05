@@ -9,4 +9,5 @@ pub mod ics;
 pub mod log;
 pub mod render;
 pub mod schedule;
+pub mod snapshot;
 pub mod telegram;
