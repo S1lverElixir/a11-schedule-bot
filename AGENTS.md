@@ -3,11 +3,11 @@
 ## What this repo is
 - A personal Telegram schedule bot for group А-11 of БТЭУ (Gomel). One user, the owner; everyone else gets silence. Bot text is Russian and restrained.
 - It runs 24/7 in a free fps.ms container with a hard 128 MB RAM limit and is renewed by hand every day.
-- `bot.py` is the previous Python bot: the behavior reference for the parity fixtures and the rollback path, not the running bot.
-- `rust/` is the bot that runs in production. The host starts `run.py` (panel variable `PY_FILE=run.py`), which copies `rust/bin/a11-bot` to a temp dir and execs it; a failed self-test falls back to `bot.py`. `rust/bin/a11-bot` is a committed Linux binary and CI refreshes it on every `rust/**` push.
-- `schedule_data.py` is the only source of schedule facts (`SCHEDULE`, `KIND`, `BELLS`, `SEMESTER_START`/`END`, `ANCHOR_MONDAY`, `week_mark`; the record format is in its docstring). `bot.py` only renders and serves it.
+- `rust/` is the whole bot: it is what runs in production. The old Python bot, its wheels and its fixture generators are deleted; the behavior they defined is frozen in `rust/tests/fixtures/`.
+- `rust/src/schedule.rs` is the only source of schedule facts (`SCHEDULE`, `KIND`, `BELLS`, `SEMESTER_START`/`END`, `ANCHOR_MONDAY`, `week_mark`; the record format and the source of every claim are in its module comment).
 - `SPEC.md` is the behavior contract. It wins on behavior, this file wins on process; the owner's task overrides both, except Approvals, Secrets and Hard constraints.
-- `run.py` (protected) is the host entry, selected by the panel variable `PY_FILE=run.py`: on a container without `.git` it does init + fetch + reset, then copies `rust/bin/a11-bot` to a temp dir, self-tests it and execs it; any failure falls back to `bot.py`. The `git pull` on normal starts is the host's.
+- `run.py` (protected) is the host entry, selected by the panel variable `PY_FILE=run.py`: on a container without `.git` it does init + fetch + reset, then copies `rust/bin/a11-bot` to a temp dir, self-tests it and execs it. A failed self-test means the bot does not start — there is no second implementation to fall back on. The `git pull` on normal starts is the host's.
+- `rust/bin/a11-bot` is a committed Linux binary and CI refreshes it on every `rust/**` push.
 - No database, no state files, no web server: state is in memory, so a restart is safe and loses only reminder and summary de-duplication.
 - `.agents/skills/verify-bot/` holds the checks. A skill grants no permissions: Approvals apply anyway.
 
@@ -20,8 +20,8 @@
 ## Approvals
 - Requested fixes that change no bot text, format or reply logic: do them right away.
 - A change of text, format, buttons or reply logic, a new dependency, restructuring, or a protected file: short plan first, wait for approval.
-- Protected files: `.github/workflows/*`, `run.py`, `wheels/*`.
-- Live actions need a direct request in this task: `git push`, anything that restarts or stops the container, running `bot.py` with the production token.
+- Protected files: `.github/workflows/*`, `run.py`.
+- Live actions need a direct request in this task: `git push`, anything that restarts or stops the container, running the bot with the production token.
 - Commit to `main` yourself after a green gate, in small steps, one Russian line saying what and why, like the recent `git log`. Never force-push or rewrite history. Push only when the request says so; an earlier permission does not carry over.
 
 ## Secrets
@@ -31,41 +31,41 @@
 - `.env` and `__pycache__` never enter the repo; check `git status` before every commit.
 
 ## Hard constraints
-- **aiohttp only.** No aiogram or any other framework: an aiogram 3 import with pydantic does not fit the 128 MB limit and the bot never starts. Transport is the hand-rolled `Telegram` class.
-- **A new dependency needs four things:** a real reason, a wheel that installs on the host's cp311 Linux (cp311 manylinux for compiled code, `py3-none-any` for pure Python), its module added to the `import` guard in `run.py` (otherwise the host never installs it), and a memory measurement before and after.
+- **No async runtime, no framework.** Two plain threads (polling, timers) over blocking `ureq` + rustls: tokio or a heavier HTTP stack does not fit the 128 MB limit. Transport is the hand-rolled `Telegram` class in `telegram.rs`.
+- **A new dependency needs three things:** a real reason, a memory measurement before and after (`--selftest 2`), and a static musl build that still links.
 - **Polling only, no webhooks**; `deleteWebhook` at startup only clears leftovers.
-- **Time:** fixed UTC+3, `timezone(timedelta(hours=3))`, no pytz or zoneinfo. Read the clock only as `datetime.now(TZ)`; `date.today()` and naive `datetime.now()` are bugs.
-- **No emojis in bot strings** (messages, buttons, calendar, `.ics` names). Formatting is Telegram HTML (`<b>`, `<i>`, `<code>`, `<blockquote>`), `parse_mode="HTML"`; every dynamic value goes through `html.escape`.
-- **The bot answers only the owner.** Never weaken the `OWNER_ID` guards in `on_message` and `on_callback`, never add public commands.
+- **Time:** fixed UTC+3 as `TZ_OFFSET_SECS`, no chrono, pytz or zoneinfo. Read the clock only through `Now::local()`, `local_now_seconds()` or `Stamp::now()`; a local day taken from a UTC timestamp is a bug.
+- **No emojis in bot strings** (messages, buttons, calendar, `.ics` names). Formatting is Telegram HTML (`<b>`, `<i>`, `<code>`, `<blockquote>`), `parse_mode="HTML"`; every dynamic value goes through `render::esc`.
+- **The reply keyboard rides on every message** that does not already carry an inline keyboard: Desktop hides the keyboard when the newest bot message has none, the phone keeps it (SPEC п.7).
+- **The bot answers only the owner.** Never weaken the `owner_id` guards in `on_message` and `on_callback`, never add public commands.
 
 ## Commands
 Run from the repo root.
 ```powershell
-pip install -r requirements.txt        # once per machine
-python -X utf8 bot.py                  # local run; never with the production token
+cargo build --release --manifest-path rust/Cargo.toml   # local binary: rust\target\release\a11-bot.exe
+python -X utf8 rust/tools/check.py                      # gate: build, cargo test, parity, memory
 python -X utf8 .agents/skills/verify-bot/scripts/verify_bot.py --local   # gate, offline
 python -X utf8 .agents/skills/verify-bot/scripts/verify_bot.py           # gate plus prod checks
-python -X utf8 rust/tools/check.py                                       # Rust gate: build, parity, memory
-cd rust; cargo test                                                      # the same without the Python wrapper
-gh run list --workflow=deploy.yml --limit 1                              # last deploy
-git push origin main                   # only when the owner asked in this task
+cd rust; cargo test                                     # the same tests without the wrapper
+gh run list --workflow=deploy.yml --limit 1             # last deploy
+git push origin main                    # only when the owner asked in this task
 ```
 - The shell is PowerShell: no `grep`, no `tail`, no `*.py` glob expansion for commands. Search with the read/glob/grep tools, or `Select-String`/`Get-Content` in the shell.
 - The gate prints `ЛОКАЛЬНО` and `ПРОД` sections of `[OK]/[WARN]/[FAIL]` and exits 1 on any FAIL.
-- The test path is the render functions, never a live send into the owner's chat.
+- The test path is the pure render functions and a recording stub of the API, never a live send into the owner's chat.
 
-## Rust port (`rust/`)
-- `rust/` mirrors `bot.py` feature for feature: `render.rs`/`ics.rs` are pure and never touch the network, `telegram.rs` is the transport (blocking ureq + rustls, no async runtime), `bot.rs` holds handlers and both background tasks.
-- Parity is byte-exact against two fixtures: `views.json` (7599 frozen views) and `handlers.json` (69 frozen handler calls, checked through a recording stub of the API). If a fixture and the Python bot disagree, regenerate the fixture (`gen_views.py` / `gen_handlers.py`) — never edit the test or the texts to match.
-- Data lives in `rust/src/schedule.rs`; a semester change touches it as well, and the fixture is regenerated in the same commit.
-- `cargo test` green and `check.py` printing `ИТОГ: FAIL=0` are required before a Rust commit; the Python gate says nothing about Rust.
+## Code layout (`rust/`)
+- `render.rs`/`ics.rs` are pure and never touch the network, `telegram.rs` is the transport, `bot.rs` holds handlers and both background tasks, `date.rs` is the hand-rolled calendar, `log.rs` stars out the token in every line.
+- Parity is byte-exact against two frozen fixtures: `views.json` (7599 views) and `handlers.json` (69 handler calls). They can no longer be regenerated: refreshing them means running Rust, reading the diff by eye, and committing it only when the change was the point.
+- Never edit a test or a text to make a fixture pass; a deliberate behavior change updates data, texts and fixtures in one commit.
+- `cargo test` green and `check.py` printing `ИТОГ: FAIL=0` are required before any commit.
 - `a11-bot --selftest 2` prints a deterministic hash and peak memory, `--check-net` only calls `getMe` (no message is sent). Never run either with the production token in a report, and never run the bot itself live without a direct request.
-- Deploy: a `rust/**` push makes CI build the musl binary, commit it as `rust/bin/a11-bot` and ask the panel to restart; the panel's own `deploy.yml` restart runs first, with the previous binary. Never `chmod` that file — a mode change blocks the host's `git pull`, which is how a push can silently keep old code. Local run: `rust\target\release\a11-bot.exe` with the same `.env`.
+- Deploy: a `rust/**` push makes CI build the musl binary, commit it as `rust/bin/a11-bot` and ask the panel to restart; the panel's own `deploy.yml` restart runs first, with the previous binary. Never `chmod` that file — a mode change blocks the host's `git pull`, which is how a push can silently keep old code.
 
 ## Gate
 - Run `--local` before the first change and after each batch; run the full gate before a push and when the owner asks for a health check.
 - If it is red before your changes, stop and report which checks fail; do not fix unrelated failures unless told to continue.
-- **Green is weak:** the static rules are substring matches, the reply keyboards and handlers are never called, and a crashed `import bot` is only a WARN. Green proves the rendered views and the data, not that the bot answers.
+- **Green is weak:** the static rules are substring matches, and the fixtures never cover the two background sends (morning summary, renewal reminder) — they are not handler calls. Say so when they matter.
 - Done means you paste the `ИТОГ: FAIL=…, WARN=…` line and mark every skipped check as unverified. Never say "works" or "tests pass" without it.
 - A red check is fixed at the cause; never loosen a check to make it pass.
 - For a schedule or `KIND` change, paste today's exact `day_text` output into the reply.
@@ -74,21 +74,21 @@ git push origin main                   # only when the owner asked in this task
 ## Gotchas
 - **The 409 test needs `timeout>=5`**: with `timeout=0` or `1` Telegram answers `OK` and the check lies. The gate tests the HTTP status; `healthcheck.yml` greps the body for `"error_code":409` and must stay that strict, because a bare `409` can match an `update_id`.
 - **A push only requests a restart.** `deploy.yml` is green when the panel accepts it; nothing checks which commit the container runs. Say "deployed" only after a fresh uptime and a 409; otherwise say "pushed, live version not confirmed".
-- **The panel API sits behind Cloudflare:** curl works, python's urllib gets rejected. `bot.py`'s watchdog exits silently when `FPSMS_API_KEY`/`FPSMS_SERVER_UUID` are unset, so the renewal reminder may never arrive; if the panel check was skipped, say that.
+- **The panel API sits behind Cloudflare:** curl works, python's urllib gets rejected. The watchdog stays quiet when `FPSMS_API_KEY`/`FPSMS_SERVER_UUID` are unset, so the renewal reminder may never arrive; if the panel check was skipped, say that.
 - **The server UUID is hardcoded in both workflows**, while the watchdog reads it from the environment. If the server is recreated, update the two workflows and tell the owner where to change the value.
 - **Renewal is manual** ("Add 24 hours", reCAPTCHA) and there is no grace period to rely on: stop renewing and the server is deleted. Do not remove the watchdog and do not automate the renewal.
-- **`week_mark` is parity only:** an anchor moved by an even number of weeks changes no label, an odd shift flips every label. The two dates in the `bot.py` assert and the six in `verify_bot.py` are fixed facts from the official table — never retype them to make a check pass. If they fail after a new anchor, the anchor is wrong.
+- **`week_mark` is parity only:** an anchor moved by an even number of weeks changes no label, an odd shift flips every label. The six dates in `schedule.rs`'s test and the six in `verify_bot.py` are fixed facts from the official table — never retype them to make a check pass. If they fail after a new anchor, the anchor is wrong.
+- **The over/under line is read from the source table by geometry:** in `a-1.xls` the dash row sits inside a slot and splits it in half; an entry above an empty dash exists only «над», an entry below the dash only «под». Three pairs are над-only: Monday 14:40, Thursday 09:00, Friday 14:40.
 - **`SEMESTER_START`/`SEMESTER_END` cut everything:** outside them every screen says "пар нет", calendar cells are inactive, month arrows disappear, the morning summary stops. Past `SEMESTER_END` the gate still goes green, so put "the data ended on …" in the first line instead of reporting done.
 - **`.ics` is RFC 5545 on purpose:** floating local time, UTC `DTSTAMP`, escaping, folding at 75 octets, CRLF. It was once dead in production while the checks were green, so do not simplify it.
-- **`_ScrubFormatter` hides `BOT_TOKEN` in logs** because aiohttp exception text carries the request URL and the console is visible in the panel. `run.py` builds a token URL too and does not scrub it.
-- **The host runs Python 3.11** (wheels are cp311) while this machine has 3.13: 3.12+ syntax passes the local gate and kills prod at import.
+- **The log scrubs `BOT_TOKEN`** because HTTP error text carries the request URL and the console is visible in the panel. `run.py` builds a token URL too and does not scrub it.
 
 ## Semester change (rare, follow the order)
 1. bteu.by -> «Студенту» -> «Расписание занятий» -> «Формирование учебных недель»: the official over/under-the-line table. The site publishes it late; do not change data before it appears.
-2. Set `ANCHOR_MONDAY` (a Monday from that table; now 21.09.2026 = «под»), `SEMESTER_START`, `SEMESTER_END`. Leave the dated checks alone: if they now fail, the anchor is wrong.
-3. Rewrite `SCHEDULE` from the group's `.xls` on the faculty's «Стабильное расписание» page; week variants are «над»/«под»/«both», the record format is in the docstring.
-4. Update `KIND` for new subjects: the site publishes no types, and the provenance of the current values is in the `KIND` comment.
-5. Run the gate, then update `SPEC.md` in the same commit.
+2. Set `ANCHOR_MONDAY` (a Monday from that table; now 21.09.2026 = «под»), `SEMESTER_START`, `SEMESTER_END` in `rust/src/schedule.rs`. Leave the dated checks alone: if they now fail, the anchor is wrong.
+3. Rewrite `SCHEDULE` from the group's `.xls` on the faculty's «Стабильное расписание» page; week variants are `Over`/`Under`/`Both`, the record format and the dash rule are in the module comment.
+4. Update `KIND` for new subjects: the site publishes no types, and the provenance of the current values is next to the table.
+5. Run the gate, refresh the fixtures by running Rust and reading the diff, then update `SPEC.md` in the same commit.
 
 ## Code style
 - One change at a time; no unrelated refactors in the same commit.
