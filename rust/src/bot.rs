@@ -40,6 +40,11 @@ impl<A: Api> Bot<A> {
     }
 
     /// Отправка с логированием ошибки: сетевой сбой не должен ронять опрос.
+    ///
+    /// Telegram Desktop прячет клавиатуру кнопок, если последнее сообщение бота
+    /// пришло без reply_markup — телефон её оставляет. Поэтому main_kb() едет почти
+    /// с каждым ответом; не влезает она только туда, где уже лежит inline-клавиатура
+    /// («Неделя» и «Выбрать день»).
     fn send(&self, chat_id: i64, text: &str, markup: Option<Value>, mode: Option<&str>) {
         let params = send_message_params(chat_id, text, markup, mode);
         if let Err(e) = self.api.call("sendMessage", &params) {
@@ -74,16 +79,21 @@ impl<A: Api> Bot<A> {
             render::BTN_TODAY => self.send(
                 chat_id,
                 &render::day_text(today, " · сегодня", now),
-                None,
+                Some(render::main_kb()),
                 Some("HTML"),
             ),
             render::BTN_TOMORROW => self.send(
                 chat_id,
                 &render::day_text(today.add_days(1), " · завтра", now),
-                None,
+                Some(render::main_kb()),
                 Some("HTML"),
             ),
-            render::BTN_NOW => self.send(chat_id, &render::now_text(now), None, Some("HTML")),
+            render::BTN_NOW => self.send(
+                chat_id,
+                &render::now_text(now),
+                Some(render::main_kb()),
+                Some("HTML"),
+            ),
             render::BTN_WEEK => {
                 let monday = today.add_days(-(today.weekday() as i32));
                 self.send(
@@ -93,7 +103,12 @@ impl<A: Api> Bot<A> {
                     Some("HTML"),
                 );
             }
-            render::BTN_BELLS => self.send(chat_id, &render::bells_text(), None, Some("HTML")),
+            render::BTN_BELLS => self.send(
+                chat_id,
+                &render::bells_text(),
+                Some(render::main_kb()),
+                Some("HTML"),
+            ),
             _ => self.send(
                 chat_id,
                 render::PICK_PROMPT,
@@ -152,7 +167,12 @@ impl<A: Api> Bot<A> {
                         Some(v) => v,
                         None => return bad_data(data),
                     };
-                    self.send(chat_id, &render::day_text(d, "", now), None, Some("HTML"));
+                    self.send(
+                        chat_id,
+                        &render::day_text(d, "", now),
+                        Some(render::main_kb()),
+                        Some("HTML"),
+                    );
                 } else {
                     let message_id = match cb.pointer("/message/message_id").and_then(Value::as_i64)
                     {
@@ -269,7 +289,7 @@ pub fn spawn_morning(tg: Arc<Telegram>, owner_id: i64, time: String) {
                     match tg.send_message(
                         owner_id,
                         &render::morning_text(date, Now::local()),
-                        None,
+                        Some(render::main_kb()),
                         Some("HTML"),
                     ) {
                         Ok(_) => {
@@ -315,7 +335,9 @@ pub fn spawn_watchdog(tg: Arc<Telegram>, owner_id: i64, cfg: PanelConfig) {
                             });
                             if bucket != Some("ok") && bucket != last_bucket {
                                 let text = reminder_text(hours_left, &cfg.panel_url, &cfg.server);
-                                if let Err(e) = tg.send_message(owner_id, &text, None, None) {
+                                if let Err(e) =
+                                    tg.send_message(owner_id, &text, Some(render::main_kb()), None)
+                                {
                                     log::error(&format!("watchdog send: {e}"));
                                 }
                             }

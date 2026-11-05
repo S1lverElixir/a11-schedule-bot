@@ -440,6 +440,10 @@ class Telegram:
             raise RuntimeError(f"sendDocument: {data.get('description')}")
 
 
+# Telegram Desktop прячет клавиатуру кнопок, если последнее сообщение бота пришло
+# без reply_markup — телефон её оставляет. Поэтому main_kb() прикладывается почти
+# к каждому ответу; не влезает она только туда, где уже лежит inline-клавиатура
+# («Неделя» и «Выбрать день»).
 async def send(tg, chat_id, text, reply_markup=None, parse_mode=None):
     params = {"chat_id": chat_id, "text": text}
     if reply_markup:
@@ -466,7 +470,8 @@ async def on_callback(tg, cb):
             y, m = (int(v) for v in parts[1].split("-"))
             if len(parts) == 3:
                 # новое сообщение, календарь в чате остаётся
-                await send(tg, chat_id, day_text(date(y, m, int(parts[2]))), parse_mode="HTML")
+                await send(tg, chat_id, day_text(date(y, m, int(parts[2]))), main_kb(),
+                           parse_mode="HTML")
             else:
                 await tg.call("editMessageReplyMarkup", chat_id=chat_id,
                               message_id=cb["message"]["message_id"], reply_markup=calendar_kb(y, m))
@@ -496,16 +501,17 @@ async def on_message(tg, msg):
         return  # незнакомые тексты игнорируются молча
     today = datetime.now(TZ).date()
     if text == BTN_TODAY:
-        await send(tg, chat_id, day_text(today, " · сегодня"), parse_mode="HTML")
+        await send(tg, chat_id, day_text(today, " · сегодня"), main_kb(), parse_mode="HTML")
     elif text == BTN_TOMORROW:
-        await send(tg, chat_id, day_text(today + timedelta(days=1), " · завтра"), parse_mode="HTML")
+        await send(tg, chat_id, day_text(today + timedelta(days=1), " · завтра"), main_kb(),
+                   parse_mode="HTML")
     elif text == BTN_NOW:
-        await send(tg, chat_id, now_text(), parse_mode="HTML")
+        await send(tg, chat_id, now_text(), main_kb(), parse_mode="HTML")
     elif text == BTN_WEEK:
         monday = today - timedelta(days=today.weekday())
         await send(tg, chat_id, week_text(today), reply_markup=week_kb(monday), parse_mode="HTML")
     elif text == BTN_BELLS:
-        await send(tg, chat_id, bells_text(), parse_mode="HTML")
+        await send(tg, chat_id, bells_text(), main_kb(), parse_mode="HTML")
     else:  # BTN_PICK — сетка текущего месяца
         await send(tg, chat_id, PICK_PROMPT, calendar_kb(today.year, today.month),
                    parse_mode="HTML")
@@ -538,7 +544,8 @@ async def renewal_watchdog(http, tg):
                 await send(tg, OWNER_ID,
                            f"Напоминание: сервер fps.ms остановится примерно через "
                            f"{max(1, int(hours_left))} ч. Продли сервер в панели "
-                           f"(кнопка Add 24 hours): {FPSMS_PANEL_URL}/server/{FPSMS_SERVER.split('-')[0]}")
+                           f"(кнопка Add 24 hours): {FPSMS_PANEL_URL}/server/{FPSMS_SERVER.split('-')[0]}",
+                           main_kb())
         except Exception:
             logging.exception("watchdog check failed")
         last_bucket = bucket
@@ -561,7 +568,7 @@ async def morning_summary(http, tg):
             if (SEMESTER_START <= now.date() <= SEMESTER_END
                     and target <= secs < target + 90 * 60
                     and last_sent != now.date()):
-                await send(tg, OWNER_ID, morning_text(now.date()), parse_mode="HTML")
+                await send(tg, OWNER_ID, morning_text(now.date()), main_kb(), parse_mode="HTML")
                 last_sent = now.date()
                 logging.info("morning summary sent")
         except Exception:
