@@ -1,17 +1,15 @@
 # -*- coding: utf-8 -*-
-"""Проверка Rust-бота: сборка, тесты, паритет с Python-эталоном, память.
+"""Проверка Rust-бота: сборка, тесты, паритет против замороженных снимков, память.
 
 Запуск из корня проекта: python -X utf8 rust/tools/check.py
 Код выхода 0 = нет [FAIL]. Секреты не читаются: .env не трогаем.
 """
 
-import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -62,7 +60,7 @@ def check_build():
         fail(f"бинарника нет: {BIN}")
         return False
     mb = BIN.stat().st_size / 1048576
-    ok(f"бинарник {mb:.2f} МБ (Python-боту нужно 40 МБ памяти под интерпретатор)")
+    ok(f"бинарник {mb:.2f} МБ (лимит хостинга — 128 МБ памяти)")
     return True
 
 
@@ -95,37 +93,23 @@ def check_tests():
 
 
 def check_fixture_fresh():
-    """Снимки должны совпадать со свежим выводом Python-эталона.
+    """Снимки — замороженный эталон поведения прежнего Python-бота.
 
-    Если это FAIL — сначала перегенерируй снимки: python -X utf8 rust/tools/gen_views.py
-    (и gen_handlers.py), и только потом смотри расхождения теста.
+    Python-бота в репозитории больше нет, поэтому снимки нечем перегенерировать:
+    они ловят случайное изменение текстов и вызовов, а не сверяют два бота.
+    Менять их руками можно только вместе с осознанной сменой поведения.
     """
-    section("СНИМКИ: эталон не разошёлся с Python-ботом")
-    base_env = {
-        k: v for k, v in os.environ.items() if k not in ("BOT_TOKEN", "MY_TELEGRAM_ID")
-    }
-    with tempfile.TemporaryDirectory() as tmp:
-        fresh_views = Path(tmp) / "views.json"
-        fresh_handlers = Path(tmp) / "handlers.json"
-        jobs = [
-            (["-X", "utf8", str(RUST / "tools" / "gen_views.py")],
-             dict(base_env, VIEWS_OUT=str(fresh_views)), fresh_views),
-            (["-X", "utf8", str(RUST / "tools" / "gen_handlers.py")],
-             dict(base_env, HANDLERS_OUT=str(fresh_handlers)), fresh_handlers),
-        ]
-        for args, env, out in jobs:
-            r = run([sys.executable, *args], cwd=ROOT, env=env)
-            if r.returncode != 0 or not out.exists():
-                fail(f"генератор {out.name} упал: {tail(r.stderr)}")
-                return
-        for fix, fresh in ((FIXTURE, fresh_views), (HANDLERS, fresh_handlers)):
-            old_hash = hashlib.sha256(fix.read_bytes()).hexdigest()
-            new_hash = hashlib.sha256(fresh.read_bytes()).hexdigest()
-            if old_hash != new_hash:
-                fail(f"снимки {fix.name} устарели: перегенерируй и посмотри,"
-                     " что именно изменил тест")
-                return
-        ok("снимки видов и обработчиков совпадают с текущим Python-ботом")
+    section("СНИМКИ: замороженный эталон")
+    for path, minimum in ((FIXTURE, 7000), (HANDLERS, 60)):
+        n = count_cases(path)
+        if n == 0:
+            return
+        if n < minimum:
+            warn(f"{path.name}: случаев {n}, ожидалось не меньше {minimum}")
+        else:
+            ok(f"{path.name}: {n} случаев, паритет обязан их прогнать")
+    ok("эталон заморожен: проверка означает «Rust не изменил поведение», "
+       "сверки с Python-ботом больше нет")
 
 
 def check_memory():
@@ -148,11 +132,11 @@ def check_memory():
         return
     mb = float(m_mem.group(1))
     if mb >= 50:
-        fail(f"пик памяти {mb:.1f} МБ — переписывание не дало экономии")
+        fail(f"пик памяти {mb:.1f} МБ — слишком много для бинарника, ищем утечку")
     elif mb >= 25:
         warn(f"пик памяти {mb:.1f} МБ — выше ожидаемого")
     else:
-        ok(f"пик памяти {mb:.1f} МБ (у Python-бота 40 МБ только на импорт)")
+        ok(f"пик памяти {mb:.1f} МБ (лимит хостинга 128 МБ)")
 
 
 def main():

@@ -1,4 +1,4 @@
-import os, subprocess, sys, shutil, tempfile
+import os, shutil, subprocess, sys, tempfile
 
 os.environ.setdefault("MALLOC_ARENA_MAX", "1")
 
@@ -20,7 +20,7 @@ def exec_rust():
     """
     src = os.path.abspath('rust/bin/a11-bot')
     if not os.path.exists(src):
-        print('RUST-START: бинарника нет, запускаю Python-бота', flush=True)
+        print('RUST-START: бинарника нет', flush=True)
         return False
     target = os.path.join(tempfile.gettempdir(), 'a11-bot')
     try:
@@ -29,11 +29,11 @@ def exec_rust():
         r = subprocess.run([target, '--selftest', '1'], capture_output=True,
                            text=True, timeout=30)
     except Exception as e:
-        print(f'RUST-START: не получилось ({e.__class__.__name__}: {e}), запускаю Python-бота', flush=True)
+        print(f'RUST-START: не получилось ({e.__class__.__name__}: {e})', flush=True)
         return False
     if r.returncode != 0:
         tail = (r.stdout or r.stderr or '').strip().splitlines()[-1:] or ['нет вывода']
-        print(f'RUST-START: самотест rc={r.returncode}: {tail[0][:200]}, запускаю Python-бота', flush=True)
+        print(f'RUST-START: самотест rc={r.returncode}: {tail[0][:200]}', flush=True)
         return False
     print('RUST-START: запускаю бота на Rust', flush=True)
     os.execv(target, [target])
@@ -41,11 +41,6 @@ def exec_rust():
 
 
 if not exec_rust():
-    # Запасной путь: прежний Python-бот. Он же откат, если с Rust что-то не так.
-    # wheels в репозитории: pip в лимите 128 МБ падает по памяти при сетевой установке.
-    try:
-        import aiohttp, dotenv  # noqa: F401
-    except ImportError:
-        subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--no-index', '--find-links', 'wheels', '-r', 'requirements.txt'], check=True)
-    print('PYTHON-START, starting bot', flush=True)
-    os.execv(sys.executable, [sys.executable, '-X', 'utf8', 'bot.py'])
+    # Запасного пути нет: бот только на Rust. Молча работать не будем — экшен
+    # сам не подняться, и в консоли панели остаётся причина.
+    sys.exit(1)
