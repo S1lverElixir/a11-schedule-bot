@@ -25,11 +25,12 @@ pub fn error(msg: &str) {
 }
 
 fn emit(level: &str, msg: &str) {
-    let line = match SECRET.get() {
-        Some(secret) if !secret.is_empty() => msg.replace(secret.as_str(), "***"),
-        _ => msg.to_string(),
-    };
-    println!("{} {level} {line}", local_stamp());
+    match SECRET.get() {
+        Some(secret) if !secret.is_empty() && msg.contains(secret.as_str()) => {
+            println!("{} {level} {}", local_stamp(), msg.replace(secret.as_str(), "***"));
+        }
+        _ => println!("{} {level} {msg}", local_stamp()),
+    }
 }
 
 #[cfg(test)]

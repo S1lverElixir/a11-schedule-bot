@@ -65,7 +65,21 @@ pub fn pairs_word(n: u32) -> &'static str {
 /// Аудитории для вывода: экранирование и пробел после запятой в перечнях.
 pub fn fmt_rooms(rooms: Option<&str>) -> String {
     match rooms {
-        Some(r) if !r.is_empty() => esc(r).replace(',', ", "),
+        Some(r) if !r.is_empty() => {
+            let mut out = String::with_capacity(r.len() + 4);
+            for c in r.chars() {
+                match c {
+                    '&' => out.push_str("&amp;"),
+                    '<' => out.push_str("&lt;"),
+                    '>' => out.push_str("&gt;"),
+                    '"' => out.push_str("&quot;"),
+                    '\'' => out.push_str("&#x27;"),
+                    ',' => out.push_str(", "),
+                    _ => out.push(c),
+                }
+            }
+            out
+        }
         _ => String::new(),
     }
 }
@@ -337,7 +351,9 @@ pub fn now_text(now: Now) -> String {
 pub fn render_week(monday: Date, now: Now) -> String {
     let today = now.date;
     let days: Vec<Date> = (0..7).map(|i| monday.add_days(i)).collect();
-    let counts: Vec<usize> = days.iter().map(|d| day_pairs(*d).len()).collect();
+    // один расчёт на день: раньше пары считались дважды — для счётчика и для строк
+    let lists: Vec<Vec<Pair>> = days.iter().map(|d| day_pairs(*d)).collect();
+    let counts: Vec<usize> = lists.iter().map(|v| v.len()).collect();
     let mut lines = vec![format!(
         "<b>Неделя {}–{} · {} чертой</b>",
         monday.fmt_dm(),
@@ -348,39 +364,39 @@ pub fn render_week(monday: Date, now: Now) -> String {
         // неделя целиком вне семестра: семь «пар нет» — шум
         return format!("{}\n\n<i>пар нет</i>", lines[0]);
     }
-    let mut merged: Vec<(&str, Vec<Date>)> = Vec::new();
+    let mut merged: Vec<(&str, Vec<usize>)> = Vec::new();
     let mut i = 0;
     while i < 7 {
         if i == 5 && counts[5] == 0 && counts[6] == 0 {
-            merged.push(("Сб–Вс", vec![days[5], days[6]]));
+            merged.push(("Сб–Вс", vec![5, 6]));
             i += 2;
         } else {
-            merged.push((WD_SHORT[i], vec![days[i]]));
+            merged.push((WD_SHORT[i], vec![i]));
             i += 1;
         }
     }
-    for (wd, ds) in merged {
+    for (wd, idx) in merged {
         lines.push(String::new());
-        let mark = if ds.iter().any(|d| *d == today) {
+        let mark = if idx.iter().any(|&k| days[k] == today) {
             " · сегодня"
         } else {
             ""
         };
-        if ds.len() == 1 {
-            lines.push(format!("<b>{wd} {}{mark}</b>", ds[0].fmt_dm()));
+        if idx.len() == 1 {
+            lines.push(format!("<b>{wd} {}{mark}</b>", days[idx[0]].fmt_dm()));
         } else {
             lines.push(format!(
                 "<b>{wd} {} · {}{mark}</b>",
-                ds[0].fmt_dm(),
-                ds[1].fmt_dm()
+                days[idx[0]].fmt_dm(),
+                days[idx[1]].fmt_dm()
             ));
         }
-        let pairs = day_pairs(ds[0]);
+        let pairs = &lists[idx[0]];
         if pairs.is_empty() {
             lines.push("<i>пар нет</i>".to_string());
             continue;
         }
-        for p in &pairs {
+        for p in pairs {
             let title = subject_title(p.subj);
             let tail = if p.sub { " · замена" } else { "" };
             match p.rooms {

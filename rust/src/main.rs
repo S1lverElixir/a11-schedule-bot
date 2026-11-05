@@ -128,6 +128,7 @@ fn main() {
         owner_id: cfg.owner_id,
     };
     let mut offset: i64 = 0;
+    let mut fails: u32 = 0;
     loop {
         // только нужные типы апдейтов — меньше полезная нагрузка на каждый poll
         let params = json!({
@@ -137,6 +138,7 @@ fn main() {
         });
         match tg.call("getUpdates", &params) {
             Ok(Value::Array(updates)) => {
+                fails = 0;
                 for update in &updates {
                     if let Some(id) = update.get("update_id").and_then(Value::as_i64) {
                         offset = id + 1;
@@ -146,10 +148,24 @@ fn main() {
             }
             Ok(other) => log::warn(&format!("getUpdates вернул не массив: {other}")),
             Err(e) => {
-                log::warn(&format!("poll error: {e}"));
-                std::thread::sleep(Duration::from_secs(3));
+                let pause = poll_pause(fails);
+                fails = fails.saturating_add(1);
+                log::warn(&format!("poll error: {e} — пауза {pause} с"));
+                std::thread::sleep(Duration::from_secs(pause));
             }
         }
+    }
+}
+
+/// Пауза после сбоя опроса: 3, 6, 12, 25 секунд и не больше. При лежачем интернете
+/// прежние фиксированные три секунды означали новое TLS-рукопожатие каждые три
+/// секунды круглосуточно — процессор, память и лимиты Telegram на ровном месте.
+fn poll_pause(fail_count: u32) -> u64 {
+    match fail_count {
+        0 => 3,
+        1 => 6,
+        2 => 12,
+        _ => 25,
     }
 }
 
@@ -302,4 +318,21 @@ fn peak_rss_mb() -> Option<f64> {
 #[cfg(not(any(windows, target_os = "linux")))]
 fn peak_rss_mb() -> Option<f64> {
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::poll_pause;
+
+    #[test]
+    fn poll_backoff_grows_and_stops_growing() {
+        assert_eq!(poll_pause(0), 3);
+        assert_eq!(poll_pause(1), 6);
+        assert_eq!(poll_pause(2), 12);
+        assert_eq!(poll_pause(3), 25);
+        assert_eq!(poll_pause(50), 25, "пауза не растёт бесконечно");
+        for n in 1..40 {
+            assert!(poll_pause(n) >= poll_pause(n - 1), "пауза только увеличивается");
+        }
+    }
 }
