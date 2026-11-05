@@ -165,13 +165,16 @@ def check_data(src):
              "Если сменился семестр — обнови таблицу «Формирование учебных недель» "
              "на bteu.by, ANCHOR_MONDAY и этот тест")
 
-    pairs = len(re.findall(r"^\s+subj:", sched, re.M))
+    # считаем только стабильную таблицу: литералы замен в тестах не в счёт
+    at = sched.find("const SCHEDULE")
+    table = sched[at:sched.find("/// Тип занятия по предмету", at)] if at >= 0 else ""
+    pairs = len(re.findall(r"^\s+subj:", table, re.M))
     if pairs >= 25:
         ok(f"пар в данных: {pairs} записей с учётом вариантов над/под")
     else:
         fail(f"в rust/src/schedule.rs только {pairs} записей пар — таблица неполная")
 
-    subjects = set(re.findall(r'subj:\s*(?:\n\s*)?"((?:[^"\\]|\\.)+)"', sched))
+    subjects = set(re.findall(r'subj:\s*(?:\n\s*)?"((?:[^"\\]|\\.)+)"', table))
     at = sched.find("const KIND")
     kind_block = sched[at:sched.find("];", at)] if at >= 0 else ""
     missing = sorted(s for s in subjects if f'"{s}"' not in kind_block)
@@ -195,6 +198,23 @@ def check_data(src):
                            capture_output=True, text=True).stdout.strip()
     if end and today > "%04d-%02d-%02d" % end:
         warn(f"данные кончились: сегодня {today}, а семестр до {end} — везде «пар нет»")
+
+    subs = re.findall(r"Sub \{ day: \((\d+), (\d+), (\d+)\), num: (\d+),", sched)
+    if not subs:
+        ok("датных замен в данных нет — бот показывает стабильную таблицу")
+    else:
+        bad = []
+        for y, m, d, num in subs:
+            iso = "%04d-%02d-%02d" % (int(y), int(m), int(d))
+            if not 1 <= int(num) <= 7:
+                bad.append(f"слот {num} в {iso}")
+            if start and not ("%04d-%02d-%02d" % start <= iso <= "%04d-%02d-%02d" % end):
+                bad.append(f"дата {iso} вне семестра")
+        if bad:
+            fail("замены с ошибками: " + ", ".join(bad))
+        else:
+            warn(f"датных замен: {len(subs)} — сверь их с «Начиткой» на bteu.by "
+                 "(python -X utf8 rust/tools/check_site.py)")
 
 
 # ---------------------------------------------------------------- сеть

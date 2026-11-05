@@ -4,7 +4,7 @@
 - A personal Telegram schedule bot for group А-11 of БТЭУ (Gomel). One user, the owner; everyone else gets silence. Bot text is Russian and restrained.
 - It runs 24/7 in a free fps.ms container with a hard 128 MB RAM limit and is renewed by hand every day.
 - `rust/` is the whole bot: it is what runs in production. The old Python bot, its wheels and its fixture generators are deleted; the behavior they defined is frozen in `rust/tests/fixtures/`.
-- `rust/src/schedule.rs` is the only source of schedule facts (`SCHEDULE`, `KIND`, `BELLS`, `SEMESTER_START`/`END`, `ANCHOR_MONDAY`, `week_mark`; the record format and the source of every claim are in its module comment).
+- `rust/src/schedule.rs` is the only source of schedule facts (`SCHEDULE`, `SUBSTITUTIONS`, `KIND`, `BELLS`, `SEMESTER_START`/`END`, `ANCHOR_MONDAY`, `week_mark`; the record format and the source of every claim are in its module comment). A dated `Sub` overrides the slot with that number on that day; a `Sub` with empty times cancels it.
 - `SPEC.md` is the behavior contract. It wins on behavior, this file wins on process; the owner's task overrides both, except Approvals, Secrets and Hard constraints.
 - `run.py` (protected) is the host entry, selected by the panel variable `PY_FILE=run.py`: on a container without `.git` it does init + fetch + reset, then copies `rust/bin/a11-bot` to a temp dir, self-tests it and execs it. A failed self-test means the bot does not start — there is no second implementation to fall back on. The `git pull` on normal starts is the host's.
 - `rust/bin/a11-bot` is a committed Linux binary and CI refreshes it on every `rust/**` push.
@@ -43,6 +43,7 @@
 Run from the repo root.
 ```powershell
 cargo build --release --manifest-path rust/Cargo.toml   # local binary: rust\target\release\a11-bot.exe
+python -X utf8 rust/tools/check_site.py                    # сверка с bteu.by: замены, недели, таблица
 python -X utf8 rust/tools/check.py                      # gate: build, cargo test, parity, memory
 python -X utf8 .agents/skills/verify-bot/scripts/verify_bot.py --local   # gate, offline
 python -X utf8 .agents/skills/verify-bot/scripts/verify_bot.py           # gate plus prod checks
@@ -56,7 +57,7 @@ git push origin main                    # only when the owner asked in this task
 
 ## Code layout (`rust/`)
 - `render.rs`/`ics.rs` are pure and never touch the network, `telegram.rs` is the transport, `bot.rs` holds handlers and both background tasks, `date.rs` is the hand-rolled calendar, `log.rs` stars out the token in every line.
-- Parity is byte-exact against two frozen fixtures: `views.json` (7599 views) and `handlers.json` (69 handler calls). They can no longer be regenerated: refreshing them means running Rust, reading the diff by eye, and committing it only when the change was the point.
+- Parity is byte-exact against two frozen fixtures: `views.json` (7599 views) and `handlers.json` (69 handler calls). The Rust binary rebuilds the views fixture itself: `a11-bot --dump-views rust/tests/fixtures/views.json`, then read the diff and commit it only when the change was the point. `a11-bot --dump-schedule` prints the data as JSON for `check_site.py`.
 - Never edit a test or a text to make a fixture pass; a deliberate behavior change updates data, texts and fixtures in one commit.
 - `cargo test` green and `check.py` printing `ИТОГ: FAIL=0` are required before any commit.
 - `a11-bot --selftest 2` prints a deterministic hash and peak memory, `--check-net` only calls `getMe` (no message is sent). Never run either with the production token in a report, and never run the bot itself live without a direct request.
@@ -78,6 +79,7 @@ git push origin main                    # only when the owner asked in this task
 - **The server UUID is hardcoded in both workflows**, while the watchdog reads it from the environment. If the server is recreated, update the two workflows and tell the owner where to change the value.
 - **Renewal is manual** ("Add 24 hours", reCAPTCHA) and there is no grace period to rely on: stop renewing and the server is deleted. Do not remove the watchdog and do not automate the renewal.
 - **`week_mark` is parity only:** an anchor moved by an even number of weeks changes no label, an odd shift flips every label. The six dates in `schedule.rs`'s test and the six in `verify_bot.py` are fixed facts from the official table — never retype them to make a check pass. If they fail after a new anchor, the anchor is wrong.
+- **A substitution is matched by slot number, not by subject:** `Sub { num: 3 }` replaces whatever pair 3 is that day, so a wrong number silently moves the wrong class. `check_site.py --emit` prints the site row next to each candidate — the dean writes subjects in CAPS and teachers without a space («ст.пр.Игнатьев»), so fix the wording by hand before committing.
 - **The over/under line is read from the source table by geometry:** in `a-1.xls` the dash row sits inside a slot and splits it in half; an entry above an empty dash exists only «над», an entry below the dash only «под». Three pairs are над-only: Monday 14:40, Thursday 09:00, Friday 14:40.
 - **`SEMESTER_START`/`SEMESTER_END` cut everything:** outside them every screen says "пар нет", calendar cells are inactive, month arrows disappear, the morning summary stops. Past `SEMESTER_END` the gate still goes green, so put "the data ended on …" in the first line instead of reporting done.
 - **`.ics` is RFC 5545 on purpose:** floating local time, UTC `DTSTAMP`, escaping, folding at 75 octets, CRLF. It was once dead in production while the checks were green, so do not simplify it.
@@ -88,7 +90,7 @@ git push origin main                    # only when the owner asked in this task
 2. Set `ANCHOR_MONDAY` (a Monday from that table; now 21.09.2026 = «под»), `SEMESTER_START`, `SEMESTER_END` in `rust/src/schedule.rs`. Leave the dated checks alone: if they now fail, the anchor is wrong.
 3. Rewrite `SCHEDULE` from the group's `.xls` on the faculty's «Стабильное расписание» page; week variants are `Over`/`Under`/`Both`, the record format and the dash rule are in the module comment.
 4. Update `KIND` for new subjects: the site publishes no types, and the provenance of the current values is next to the table.
-5. Run the gate, refresh the fixtures by running Rust and reading the diff, then update `SPEC.md` in the same commit.
+5. Run `rust/tools/check_site.py` (it compares the site with the data and prints a ready `Sub` block), run the gate, refresh the fixtures with `--dump-views`, then update `SPEC.md` in the same commit.
 
 ## Code style
 - One change at a time; no unrelated refactors in the same commit.
