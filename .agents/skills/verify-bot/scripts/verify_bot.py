@@ -199,7 +199,10 @@ def check_data(src):
     if end and today > "%04d-%02d-%02d" % end:
         warn(f"данные кончились: сегодня {today}, а семестр до {end} — везде «пар нет»")
 
-    subs = re.findall(r"Sub \{ day: \((\d+), (\d+), (\d+)\), num: (\d+),", sched)
+    at = sched.find("pub const SUBSTITUTIONS")
+    block = sched[at:sched.find("];", at)] if at >= 0 else ""
+    subs = re.findall(
+        r"Sub\s*\{\s*day:\s*\((\d+),\s*(\d+),\s*(\d+)\),\s*num:\s*(\d+)", block, re.S)
     if not subs:
         ok("датных замен в данных нет — бот показывает стабильную таблицу")
     else:
@@ -213,8 +216,8 @@ def check_data(src):
         if bad:
             fail("замены с ошибками: " + ", ".join(bad))
         else:
-            warn(f"датных замен: {len(subs)} — сверь их с «Начиткой» на bteu.by "
-                 "(python -X utf8 rust/tools/check_site.py)")
+            ok(f"датных замен: {len(subs)} — вне семестра и чужих слотов нет "
+               "(свежесть против сайта проверяет check_site.py)")
 
 
 # ---------------------------------------------------------------- сеть
