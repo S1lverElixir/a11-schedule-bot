@@ -10,6 +10,7 @@
 - `rust/bin/a11-bot` is a committed Linux binary and CI refreshes it on every `rust/**` push.
 - No database, no state files, no web server: state is in memory, so a restart is safe and loses only reminder and summary de-duplication.
 - `.agents/skills/verify-bot/` holds the checks. A skill grants no permissions: Approvals apply anyway.
+- A scheduled Qoder task (`Проверка замен в расписании А-11`, daily 08:30) runs `check_site.py`, and when the site published a substitution it writes it into the data, re-shots the views, runs the gate and commits locally. It never pushes.
 
 ## Owner and communication
 - The owner does not write code: no code, diffs or tracebacks in replies; describe the effect in plain Russian.
@@ -57,7 +58,7 @@ git push origin main                    # only when the owner asked in this task
 
 ## Code layout (`rust/`)
 - `render.rs`/`ics.rs` are pure and never touch the network, `telegram.rs` is the transport, `bot.rs` holds handlers and both background tasks, `date.rs` is the hand-rolled calendar, `log.rs` stars out the token in every line.
-- Parity is byte-exact against two frozen fixtures: `views.json` (7599 views) and `handlers.json` (69 handler calls). The Rust binary rebuilds the views fixture itself: `a11-bot --dump-views rust/tests/fixtures/views.json`, then read the diff and commit it only when the change was the point. `a11-bot --dump-schedule` prints the data as JSON for `check_site.py`.
+- Parity is byte-exact against two fixtures: `views.json` (7599 views) and `handlers.json` (69 handler calls). Views can be re-shot by the binary itself: `a11-bot --dump-views rust/tests/fixtures/views.json`, then read the diff and commit it only when the change was the point. Handler snapshots have no generator left: changing one means editing the JSON by hand with the full diff in front of you. `a11-bot --dump-schedule` prints the data as JSON for `check_site.py`.
 - Never edit a test or a text to make a fixture pass; a deliberate behavior change updates data, texts and fixtures in one commit.
 - `cargo test` green and `check.py` printing `ИТОГ: FAIL=0` are required before any commit.
 - `a11-bot --selftest 2` prints a deterministic hash and peak memory, `--check-net` only calls `getMe` (no message is sent). Never run either with the production token in a report, and never run the bot itself live without a direct request.
