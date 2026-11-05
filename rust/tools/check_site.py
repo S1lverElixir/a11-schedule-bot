@@ -373,7 +373,7 @@ def main():
         if col3 is None:
             continue
         for e in dated_rows(block3, col3):
-            if e["date"] < today - dt.timedelta(days=1):
+            if e["date"] < today:
                 continue
             subj, rooms, people = split_entry(e["raw"])
             subs.append({"date": e["date"], "slot": e["slot"], "subj": subj,
@@ -381,11 +381,12 @@ def main():
                          "raw": e["raw"]})
         ok(f"график «{label}» прочитан")
 
-    known = {(s["date"], s["num"]) for s in ours["substitutions"]}
-    fresh = [s for s in subs if s["slot"] and (s["date"], s["slot"]) not in known]
+    known = {(s["date"], s["num"]) for s in ours["substitutions"]}  # date уже строкой ISO
+    fresh = [s for s in subs
+             if s["slot"] and (s["date"].isoformat(), s["slot"]) not in known]
     stale = [s for s in ours["substitutions"]
-             if (dt.date.fromisoformat(s["date"]), s["num"]) not in
-             {(x["date"], x["slot"]) for x in subs if x["slot"]}]
+             if (s["date"], s["num"]) not in
+             {(x["date"].isoformat(), x["slot"]) for x in subs if x["slot"]}]
     if fresh:
         warn(f"на сайте есть замены, которых бот не знает: {len(fresh)}")
         for s in fresh[:20]:
