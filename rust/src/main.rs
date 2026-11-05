@@ -146,7 +146,13 @@ fn main() {
                     bot.handle_update(update, a11_bot::date::Now::local());
                 }
             }
-            Ok(other) => log::warn(&format!("getUpdates вернул не массив: {other}")),
+            Ok(other) => {
+                // ответ странной формы: без паузы это превратилось бы в гоняний цикл
+                let pause = poll_pause(fails);
+                fails = fails.saturating_add(1);
+                log::warn(&format!("getUpdates вернул не массив: {other} — пауза {pause} с"));
+                std::thread::sleep(Duration::from_secs(pause));
+            }
             Err(e) => {
                 let pause = poll_pause(fails);
                 fails = fails.saturating_add(1);
