@@ -206,13 +206,6 @@ pub struct Now {
 pub const TZ_OFFSET_SECS: i64 = 3 * 3600;
 
 impl Now {
-    pub fn from_parts(y: i32, m: u32, d: u32, minute: u32) -> Now {
-        Now {
-            date: Date::new(y, m, d).expect("дата из данных"),
-            minute,
-        }
-    }
-
     /// Текущий момент по UTC+3.
     pub fn local() -> Now {
         let secs = std::time::SystemTime::now()
@@ -228,10 +221,6 @@ impl Now {
 
     pub fn hh_mm(self) -> String {
         format!("{:02}:{:02}", self.minute / 60, self.minute % 60)
-    }
-
-    pub fn seconds_of_day(self) -> i64 {
-        self.minute as i64 * 60
     }
 }
 
