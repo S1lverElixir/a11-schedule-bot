@@ -130,7 +130,7 @@ const SCHEDULE: [&[Pair]; 7] = [
             subj: "Информационный час",
             rooms: Some("3-27"),
             teachers: &["ст.пр. Игнатьев А.М."],
-            weeks: Weeks::Both,
+            weeks: Weeks::Over,
         },
     ],
     // вторник
@@ -215,7 +215,7 @@ const SCHEDULE: [&[Pair]; 7] = [
             subj: "Операционные системы",
             rooms: Some("3-36,3-24"),
             teachers: &["ст.пр. Воруева В.И.", "ст.пр. Сон С.Б."],
-            weeks: Weeks::Both,
+            weeks: Weeks::Over,
         },
         Pair {
             num: 2,
@@ -327,7 +327,7 @@ const SCHEDULE: [&[Pair]; 7] = [
             subj: "Современная политэкономия",
             rooms: Some("1-21"),
             teachers: &["ст.пр. Чернявский М.Р."],
-            weeks: Weeks::Both,
+            weeks: Weeks::Over,
         },
     ],
     // суббота (пары только под чертой)
