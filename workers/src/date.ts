@@ -108,6 +108,11 @@ export class Date {
     return new Date(daysFromCivil(y, m, d));
   }
 
+  /// Дата по числу дней от 1970-01-01 — внутренний шов для Now и Stamp.
+  static fromDays(n: number): Date {
+    return new Date(n);
+  }
+
   /// Дата из года, месяца и числа; несуществующая дата — null.
   static new(y: number, m: number, d: number): Date | null {
     if (m < 1 || m > 12 || d < 1 || d > daysInMonth(y, m)) return null;
@@ -265,7 +270,7 @@ function wallSeconds(): number {
 export function nowLocal(): Now {
   const secs = wallSeconds() + TZ_OFFSET_SECS;
   return {
-    date: new Date(divEuclid(secs, 86400)),
+    date: Date.fromDays(divEuclid(secs, 86400)),
     minute: Math.trunc(remEuclid(secs, 86400) / 60),
   };
 }
@@ -277,7 +282,7 @@ export function hhMm(now: Now): string {
 /// Текущий момент по UTC+3 с точностью до секунды: дата и секунды от полуночи.
 export function localNowSeconds(): [Date, number] {
   const secs = wallSeconds() + TZ_OFFSET_SECS;
-  return [new Date(divEuclid(secs, 86400)), remEuclid(secs, 86400)];
+  return [Date.fromDays(divEuclid(secs, 86400)), remEuclid(secs, 86400)];
 }
 
 /// «2026-11-03 20:30:56» по UTC+3 — метка строки лога.

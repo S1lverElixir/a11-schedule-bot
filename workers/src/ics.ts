@@ -7,7 +7,7 @@ import { Date, Stamp } from "./date.ts";
 import { dayPairs } from "./schedule.ts";
 
 const encoder = new TextEncoder();
-const decoder = new TextDecoder("utf-8", { fatal: true });
+const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false });
 
 /// Экранирование бэкслэша, точки с запятой, запятой и перевода строки.
 function icsEscape(s: string): string {

@@ -7,9 +7,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { caseNames, valueFor } from "../src/snapshot.ts";
 
-const FIXTURE_URL = new URL("../../rust/tests/fixtures/views.json", import.meta.url);
+const FIXTURE_PATH = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../rust/tests/fixtures/views.json",
+);
 
 function short(v: unknown): string {
   const s = typeof v === "string" ? v : JSON.stringify(v);
@@ -20,7 +25,7 @@ function short(v: unknown): string {
 }
 
 test("каждый вид совпадает с эталоном байт в байт", () => {
-  const doc = JSON.parse(readFileSync(FIXTURE_URL, "utf8"));
+  const doc = JSON.parse(readFileSync(FIXTURE_PATH, "utf8"));
   const cases = doc.cases;
   assert.ok(cases.length > 7000, `снимков подозрительно мало: ${cases.length}`);
   let checked = 0;
@@ -49,13 +54,13 @@ test("каждый вид совпадает с эталоном байт в б�
 });
 
 test("перечень имён порта совпадает с эталоном один в один", () => {
-  const doc = JSON.parse(readFileSync(FIXTURE_URL, "utf8"));
+  const doc = JSON.parse(readFileSync(FIXTURE_PATH, "utf8"));
   const fixtureNames = doc.cases.map((c: { name: string }) => c.name);
   assert.deepEqual(caseNames(), fixtureNames);
 });
 
 test("имена снимков уникальны", () => {
-  const doc = JSON.parse(readFileSync(FIXTURE_URL, "utf8"));
+  const doc = JSON.parse(readFileSync(FIXTURE_PATH, "utf8"));
   const seen = new Set<string>();
   for (const c of doc.cases) {
     assert.ok(!seen.has(c.name), `дубль снимка: ${c.name}`);
