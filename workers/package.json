@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test test/date.test.ts test/schedule.test.ts",
+    "test": "node --test test/date.test.ts test/schedule.test.ts test/render.test.ts test/ics.test.ts test/parity.test.ts test/handlers.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
