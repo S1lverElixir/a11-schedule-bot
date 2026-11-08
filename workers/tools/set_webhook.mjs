@@ -4,12 +4,17 @@
 //! Запуск из корня репозитория:
 //!   node workers/tools/set_webhook.mjs <адрес-воркера> <секрет-вебхука>
 //!
+//! Для тестового бота (его токена в .env нет) добавь флаг --stdin и вставь
+//! токен первой строкой:
+//!   node workers/tools/set_webhook.mjs <адрес-воркера> <секрет-вебхука> --stdin
+//!
 //! Секрет — тот же, что в секретe WEBHOOK_SECRET воркера (npx wrangler secret put).
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createInterface } from "node:readline";
 
-const [url, secret] = process.argv.slice(2);
+const [url, secret, flag] = process.argv.slice(2);
 if (!url || !secret) {
   console.error("нужны два аргумента: адрес воркера и секрет вебхука");
   process.exit(1);
@@ -44,9 +49,24 @@ function readToken() {
   return null;
 }
 
-const token = readToken();
+async function readTokenStdin() {
+  const rl = createInterface({ input: process.stdin });
+  const it = rl[Symbol.asyncIterator]();
+  for await (const line of it) {
+    const t = line.trim();
+    if (t !== "") {
+      rl.close();
+      return t;
+    }
+  }
+  return null;
+}
+
+const token = flag === "--stdin" ? await readTokenStdin() : readToken();
 if (!token) {
-  console.error("в .env нет BOT_TOKEN");
+  console.error(
+    flag === "--stdin" ? "токен не введён" : "в .env нет BOT_TOKEN",
+  );
   process.exit(1);
 }
 

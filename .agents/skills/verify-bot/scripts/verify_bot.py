@@ -221,6 +221,96 @@ def check_data(src):
 
 
 # ---------------------------------------------------------------- сеть
+WORKERS = ROOT / "workers"
+WORKERS_TESTS = ["date", "schedule", "render", "ics", "parity", "handlers"]
+
+
+def check_workers():
+    """Порт на Cloudflare Workers: тесты node, типы, статика нового кода.
+
+    Главный тест здесь — паритет: порт пересчитывает те же 7599 снимков видов
+    и 69 вызовов обработчиков против замороженных фикстур rust/tests/fixtures.
+    """
+    section("ЛОКАЛЬНО: порт Workers — тесты, типы, статика")
+    if not (WORKERS / "package.json").exists():
+        warn("папки workers нет — порт не проверялся")
+        return
+    test_files = [str(WORKERS / "test" / f"{n}.test.ts") for n in WORKERS_TESTS]
+    missing = [f for f in test_files if not Path(f).exists()]
+    if missing:
+        fail("нет тестов порта: " + ", ".join(Path(f).name for f in missing))
+        return
+    try:
+        r = subprocess.run(["node", "--test", *test_files],
+                           capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", cwd=ROOT, timeout=600)
+    except FileNotFoundError:
+        fail("node не найден — порт Workers не проверялся")
+        return
+    except subprocess.TimeoutExpired:
+        fail("node --test не завершился за 10 минут")
+        return
+    m_pass = re.search(r"^ℹ pass (\d+)", r.stdout, re.M)
+    m_fail = re.search(r"^ℹ fail (\d+)", r.stdout, re.M)
+    failed = int(m_fail.group(1)) if m_fail else (0 if r.returncode == 0 else -1)
+    if r.returncode != 0 or failed != 0:
+        tail = "\n".join(ln for ln in (r.stdout + r.stderr).splitlines() if ln.strip())[-500:]
+        fail(f"node --test: rc={r.returncode}, провалено {failed} — порт расходится с эталоном\n{tail}")
+    else:
+        ok(f"порт Workers: {m_pass.group(1) if m_pass else '?'} тестов зелёные "
+           "(паритет 7599 видов и 69 вызовов внутри)")
+
+    if not (WORKERS / "node_modules" / "typescript").exists():
+        warn("node_modules в workers нет (npm install) — типы не проверялись")
+    else:
+        try:
+            t = subprocess.run(["node", "node_modules/typescript/bin/tsc", "--noEmit"],
+                               capture_output=True, text=True, encoding="utf-8",
+                               errors="replace", cwd=WORKERS, timeout=300)
+            if t.returncode == 0:
+                ok("типизация workers: tsc --noEmit чистая")
+            else:
+                fail(f"tsc --noEmit: rc={t.returncode}: {(t.stdout + t.stderr).strip()[-300:]}")
+        except Exception as e:
+            warn(f"tsc не запустился: {e}")
+
+    wsrc = {p.stem: p.read_text(encoding="utf-8") for p in sorted((WORKERS / "src").glob("*.ts"))}
+    wall = "\n".join(wsrc.values())
+
+    guards = len(re.findall(r"\?\.id !== this\.ownerId", wsrc.get("bot", "")))
+    if guards >= 2:
+        ok(f"фильтр владельца в порте обработчиков ({guards} проверки)")
+    else:
+        fail(f"в workers/src/bot.ts проверок на owner — {guards}, нужно минимум 2")
+
+    bad = [f"{name}: {m.group(0)!r}"
+           for name, text in wsrc.items()
+           for m in [EMOJI.search(text)] if m]
+    if bad:
+        fail("эмодзи в коде воркера: " + ", ".join(bad[:5]))
+    else:
+        ok("эмодзи в строках воркера нет")
+
+    if "X-Telegram-Bot-Api-Secret-Token" in wsrc.get("index", ""):
+        ok("вебхук проверяет секретный заголовок Telegram")
+    else:
+        fail("в workers/src/index.ts нет проверки секрета вебхука")
+
+    if re.search(r"\b\d{8,}:[A-Za-z0-9_-]{30,}\b", wall):
+        fail("в workers/src похоже на литерал токена бота — секреты в коде запрещены")
+    else:
+        ok("токенов в исходниках воркера нет")
+
+    try:
+        cfg = (WORKERS / "wrangler.jsonc").read_text(encoding="utf-8")
+        if "30 4 * * *" in cfg:
+            ok("крон сводки: 04:30 UTC = 07:30 по Минску")
+        else:
+            fail("в workers/wrangler.jsonc нет крона 30 4 * * *")
+    except OSError:
+        fail("нет workers/wrangler.jsonc")
+
+
 def check_prod(env):
     section("ПРОД: живость бота (409-тест, timeout>=5 обязателен)")
     token = env.get("BOT_TOKEN")
@@ -311,6 +401,7 @@ def main():
     check_rust()
     check_static(src)
     check_data(src)
+    check_workers()
 
     if not local_only:
         env = load_env()

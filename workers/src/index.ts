@@ -36,7 +36,7 @@ function errText(e: unknown): string {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    log.setSecret(env.BOT_TOKEN);
+    log.setSecret(env.BOT_TOKEN ?? "");
     if (request.method === "GET") {
       // живость воркера: ничего не рассылает, секретов не называет
       return new Response("a11-bot worker\n", { status: 200 });
@@ -71,7 +71,7 @@ export default {
     env: Env,
     _ctx: ExecutionContext,
   ): Promise<void> {
-    log.setSecret(env.BOT_TOKEN);
+    log.setSecret(env.BOT_TOKEN ?? "");
     const ownerId = Number(env.MY_TELEGRAM_ID.trim());
     if (!Number.isSafeInteger(ownerId)) {
       log.error("MY_TELEGRAM_ID — не число, сводка не отправлена");
