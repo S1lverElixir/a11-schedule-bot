@@ -65,6 +65,15 @@ export class Telegram implements Api {
     );
   }
 
+  async sendMessage(
+    chatId: number,
+    text: string,
+    replyMarkup?: unknown,
+    parseMode?: string,
+  ): Promise<unknown> {
+    return this.call("sendMessage", sendMessageParams(chatId, text, replyMarkup, parseMode));
+  }
+
   /// Отправка .ics как документа с подписью и HTML-разметкой подписи.
   async sendDocument(
     chatId: number,

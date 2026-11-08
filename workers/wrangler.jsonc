@@ -1,0 +1,19 @@
+// Конфиг воркера расписания А-11. Развёртывание: npx wrangler deploy (из этой папки).
+// Секреты (BOT_TOKEN, MY_TELEGRAM_ID, WEBHOOK_SECRET) ставятся только командой
+// npx wrangler secret put — в файле их нет и быть не должно.
+{
+  "name": "a11-bot",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  // утренняя сводка: 04:30 UTC = 07:30 по Минску (UTC+3)
+  "triggers": {
+    "crons": ["30 4 * * *"]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "DEDUP",
+      "id": "e158124f632143b0b9533257f914e9c0"
+    }
+  ],
+  "workers_dev": true
+}
