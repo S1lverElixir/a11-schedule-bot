@@ -39,6 +39,7 @@ function parseU32(s: string): number | null {
 
 const p2 = (n: number): string => String(n).padStart(2, "0");
 const p4 = (n: number): string => String(n).padStart(4, "0");
+export { p2 as pad2, p4 as pad4 };
 
 /// Дни от 1970-01-01 до гражданской даты (алгоритм Хауарда Хиннанта).
 function daysFromCivil(y: number, m: number, d: number): number {
