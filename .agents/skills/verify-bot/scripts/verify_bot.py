@@ -329,12 +329,14 @@ def check_workers_prod(env):
         warn("нет BOT_TOKEN в .env — прод-проверки воркера пропущены")
         return
     try:
-        # workers.dev за Cloudflare: urllib получает 403, curl с браузерным UA проходит
+        # workers.dev за Cloudflare: urllib получает 403, curl с браузерным UA проходит;
+        # локальный DNS иногда отдаёт только IPv6 с мёртвым путём — поэтому -4 и ретраи
         r = subprocess.run(
-            ["curl", "-s", "--max-time", "30", "-w", "\n%{http_code}", WORKER_URL,
+            ["curl", "-4", "-s", "--max-time", "25", "--retry", "4", "--retry-all-errors",
+             "--retry-delay", "2", "-w", "\n%{http_code}", WORKER_URL,
              "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                    "AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36"],
-            capture_output=True, text=True, timeout=40)
+            capture_output=True, text=True, timeout=180)
         body, _, code = r.stdout.rpartition("\n")
         if code == "200" and "a11-bot worker" in body:
             ok(f"воркер отвечает 200: {WORKER_URL}")
