@@ -141,6 +141,16 @@ export function dayPairs(d: Date): Pair[] {
   return dayPairsWith(d, subsOn(d, SUBSTITUTIONS));
 }
 
+/// Номера отменённых слотов дня: замены с пустым временем, по порядку номеров.
+/// Отмена убирает пару из dayPairs — эта функция возвращает её номер, чтобы вид
+/// дня мог пометить «N-я пара отменена».
+export function cancelledNums(d: Date): number[] {
+  return subsOn(d, SUBSTITUTIONS)
+    .filter((s) => s.start === "" && s.end === "")
+    .map((s) => s.num)
+    .sort((a, b) => a - b);
+}
+
 /// Тот же расчёт с готовым списком замен этого дня — чтобы логику можно было
 /// проверить без правки константы.
 export function dayPairsWith(d: Date, subs: readonly Sub[]): Pair[] {

@@ -4,7 +4,9 @@
 //! отступы и тире здесь менять нельзя: parity-тест сравнивает байт-в-байт.
 
 use crate::date::{wd_lower, Date, Now, MONTHS, WD_FULL, WD_SHORT};
-use crate::schedule::{day_pairs, kind, week_label, Pair, BELLS, SEMESTER_END, SEMESTER_START};
+use crate::schedule::{
+    cancelled_nums, day_pairs, kind, week_label, Pair, BELLS, SEMESTER_END, SEMESTER_START,
+};
 use serde_json::{json, Value};
 
 pub const BTN_TODAY: &str = "Сегодня";
@@ -13,7 +15,12 @@ pub const BTN_NOW: &str = "Сейчас";
 pub const BTN_WEEK: &str = "Неделя";
 pub const BTN_BELLS: &str = "Звонки";
 pub const BTN_PICK: &str = "Выбрать день";
-pub const GREETING: &str = "Расписание группы А-11. Выбирай кнопками ниже.";
+/// Приветствие /start: короткая шапка и польза, без перечисления всех функций.
+pub const GREETING: &str = "<b>Расписание группы А-11</b>\nДни, неделя, «Сейчас», звонки и календарь — кнопками ниже.\n<i>Утром в 07:30 приходит сводка дня.</i>";
+/// /help: карта возможностей — единственное место, где перечисление уместно.
+pub const HELP_TEXT: &str = "<b>Что умеет бот</b>\nСегодня и Завтра — расписание дня с прогрессом.\nСейчас — что идёт и что дальше.\nНеделя — раскладка недели; стрелки листают, «Экспорт в календарь» даёт .ics.\nВыбрать день — календарь на месяц.\nЗвонки — таблица звонков.\n<i>Утром в 07:30 приходит сводка дня.</i>";
+/// Ответ на незнакомый текст владельца: короткая подсказка вместо молчания.
+pub const UNKNOWN_TEXT: &str = "Не понял, кнопки ниже.";
 pub const PICK_PROMPT: &str = "<b>Выбери день</b>";
 
 /// Экранирование HTML как `html.escape(s)` в Python (включая кавычки).
@@ -147,6 +154,13 @@ fn progress_bar(pairs: &[Pair], minutes: u32) -> String {
     out
 }
 
+/// Строки отмен: «N-я пара отменена», по одной на слот.
+pub fn cancel_lines(nums: &[u8]) -> Vec<String> {
+    nums.iter()
+        .map(|n| format!("<i>{n}-я пара отменена</i>"))
+        .collect()
+}
+
 /// Диапазон дня «пары HH:MM–HH:MM»; для сегодня — с прогресс-баром в code-блоке.
 fn day_span_block(pairs: &[Pair], minutes_now: Option<u32>) -> String {
     let rng = format!("пары {}–{}", pairs[0].start, pairs[pairs.len() - 1].end);
@@ -173,7 +187,8 @@ fn status_line(pairs: &[Pair], now: u32) -> String {
     "занятия окончены".to_string()
 }
 
-/// Сообщение одного дня: шапка, черта, диапазон (у сегодня — бар), блоки пар.
+/// Сообщение одного дня: шапка, черта, диапазон (у сегодня — бар), блоки пар;
+/// в пустом дне — подсказка «ближайшая пара», в конце — отменённые слоты.
 pub fn day_text(d: Date, suffix: &str, now: Now) -> String {
     let mut head = format!(
         "<b>{}, {}{}</b>\nНеделя {} чертой",
@@ -182,6 +197,7 @@ pub fn day_text(d: Date, suffix: &str, now: Now) -> String {
         esc(suffix),
         week_label(d)
     );
+    let cancels = cancel_lines(&cancelled_nums(d));
     let pairs = day_pairs(d);
     if pairs.is_empty() {
         let line = if d == now.date {
@@ -189,7 +205,17 @@ pub fn day_text(d: Date, suffix: &str, now: Now) -> String {
         } else {
             "пар нет"
         };
-        return format!("{head}\n\n<i>{line}</i>");
+        let mut text = format!("{head}\n\n<i>{line}</i>");
+        for cl in &cancels {
+            text.push_str("\n\n");
+            text.push_str(cl);
+        }
+        if let Some((nd, first)) = next_day_first_pair(d) {
+            text.push_str("\n\n<blockquote>");
+            text.push_str(&next_pair_hint(d, nd, &first));
+            text.push_str("</blockquote>");
+        }
+        return text;
     }
     let today = d == now.date;
     let mut status: Option<String> = None;
@@ -234,6 +260,10 @@ pub fn day_text(d: Date, suffix: &str, now: Now) -> String {
     };
     text.push_str("\n\n");
     text.push_str(&blocks.join("\n\n"));
+    for cl in &cancels {
+        text.push_str("\n\n");
+        text.push_str(cl);
+    }
     text
 }
 
@@ -473,12 +503,12 @@ pub fn main_kb() -> Value {
     })
 }
 
-/// Кнопки под неделей: ‹ | экспорт в календарь | ›.
+/// Кнопки под неделей: ‹ | Экспорт в календарь | ›.
 pub fn week_kb(monday: Date) -> InlineKb {
     InlineKb {
         rows: vec![InlineKb::row(vec![
             btn("‹", format!("wk:{}", monday.add_days(-7).fmt_iso())),
-            btn("экспорт в календарь", format!("ics:{}", monday.fmt_iso())),
+            btn("Экспорт в календарь", format!("ics:{}", monday.fmt_iso())),
             btn("›", format!("wk:{}", monday.add_days(7).fmt_iso())),
         ])],
     }
@@ -510,7 +540,7 @@ pub fn calendar_kb(y: i32, m: u32, now: Now) -> InlineKb {
             if cell.month() == m && SEMESTER_START <= cell && cell <= SEMESTER_END {
                 let mark = if cell == today { "·" } else { "" };
                 row.push(btn(
-                    format!("{}{mark}", cell.day()),
+                    format!("{mark}{}", cell.day()),
                     format!(
                         "cal:{:04}-{:02}:{:02}",
                         cell.year(),
@@ -583,12 +613,17 @@ pub fn morning_text(d: Date, now: Now) -> String {
             _ => lines.push(format!("{} ({}) {title}{tail}", p.num, p.start)),
         }
     }
-    format!(
+    let mut text = format!(
         "{head}\n{info}\n\n{}\n<i>{} {}</i>",
         lines.join("\n"),
         pairs.len(),
         pairs_word(pairs.len() as u32)
-    )
+    );
+    for cl in cancel_lines(&cancelled_nums(d)) {
+        text.push('\n');
+        text.push_str(&cl);
+    }
+    text
 }
 
 #[cfg(test)]
@@ -615,5 +650,23 @@ mod tests {
         assert_eq!(fmt_minutes(60), "1 ч");
         assert_eq!(fmt_minutes(120), "2 ч");
         assert_eq!(fmt_minutes(95), "1 ч 35 мин");
+    }
+
+    #[test]
+    fn cancel_lines_one_per_slot() {
+        assert!(cancel_lines(&[]).is_empty());
+        assert_eq!(cancel_lines(&[3]), vec!["<i>3-я пара отменена</i>"]);
+        assert_eq!(
+            cancel_lines(&[3, 5]),
+            vec!["<i>3-я пара отменена</i>", "<i>5-я пара отменена</i>"]
+        );
+    }
+
+    #[test]
+    fn cancelled_nums_empty_until_data_has_cancellations() {
+        // в данных пока нет отмен — функция обязана вернуть пусто;
+        // случай с отменой проверяется через cancel_lines и придёт с данными
+        let d = Date::parse_iso("2026-12-16").expect("дата");
+        assert!(cancelled_nums(d).is_empty());
     }
 }

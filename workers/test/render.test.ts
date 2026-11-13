@@ -2,7 +2,8 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { esc, fmtMinutes, fmtRooms, pairsWord } from "../src/render.ts";
+import { cancelLines, dayText, esc, fmtMinutes, fmtRooms, pairsWord } from "../src/render.ts";
+import { Date, type Now } from "../src/date.ts";
 
 test("округление половины к чётному совпадает с Python", () => {
   // сама функция приватна; проверяем через поведенческие случаи ниже и паритет
@@ -40,4 +41,32 @@ test("аудитории: пробел после запятой, без ауд�
   assert.equal(fmtRooms("2-11"), "2-11");
   assert.equal(fmtRooms(""), "");
   assert.equal(fmtRooms(null), "");
+});
+
+test("отменённые пары: по строке «N-я пара отменена» на слот", () => {
+  assert.deepEqual(cancelLines([]), []);
+  assert.deepEqual(cancelLines([3]), ["<i>3-я пара отменена</i>"]);
+  assert.deepEqual(cancelLines([3, 5]), [
+    "<i>3-я пара отменена</i>",
+    "<i>5-я пара отменена</i>",
+  ]);
+});
+
+test("пустой день внутри семестра даёт подсказку «ближайшая пара»", () => {
+  const now: Now = { date: Date.parseIso("2026-10-23")!, minute: 720 };
+  const sunday = dayText(Date.parseIso("2026-10-25")!, "", now);
+  assert.ok(sunday.includes("<i>пар нет</i>"));
+  assert.ok(sunday.includes("<blockquote>завтра:"));
+  // в каникулах пар нет и в пределах недели — подсказки нет
+  const vacation = dayText(Date.parseIso("2027-01-05")!, "", now);
+  assert.ok(vacation.includes("<i>пар нет</i>"));
+  assert.ok(!vacation.includes("<blockquote>"));
+});
+
+test("отмены не ломают день с парами: замена вместо отменённого слота выводится", () => {
+  const now: Now = { date: Date.parseIso("2026-12-16")!, minute: 720 };
+  const text = dayText(Date.parseIso("2026-12-16")!, "", now);
+  assert.ok(text.includes("Час куратора"));
+  assert.ok(text.includes(" · замена"));
+  assert.ok(!text.includes("отменена"));
 });

@@ -159,6 +159,23 @@ pub fn day_pairs(d: Date) -> Vec<Pair> {
     day_pairs_with(d, &subs_on(d, SUBSTITUTIONS))
 }
 
+/// Номера отменённых слотов дня: замены с пустым временем, по порядку номеров.
+/// Отмена убирает пару из day_pairs — эта функция возвращает её номер, чтобы вид
+/// дня мог пометить «N-я пара отменена».
+pub fn cancelled_nums(d: Date) -> Vec<u8> {
+    let mut nums: Vec<u8> = SUBSTITUTIONS
+        .iter()
+        .filter(|s| {
+            Date::new(s.day.0, s.day.1, s.day.2) == Some(d)
+                && s.start.is_empty()
+                && s.end.is_empty()
+        })
+        .map(|s| s.num)
+        .collect();
+    nums.sort_unstable();
+    nums
+}
+
 /// Тот же расчёт с готовым списком замен этого дня — чтобы логику можно было
 /// проверить без правки константы.
 pub fn day_pairs_with(d: Date, subs: &[Sub]) -> Vec<Pair> {

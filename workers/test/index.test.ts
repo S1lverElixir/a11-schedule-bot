@@ -177,7 +177,7 @@ test("вебхук: кривой JSON — 400, кривой MY_TELEGRAM_ID — 5
   assert.equal(badOwner.status, 500);
 });
 
-test("вебхук: чужое сообщение, незнакомый текст и чужой чат — молчание", async () => {
+test("вебхук: чужое и нетекстовое — молчание, незнакомый текст — подсказка", async () => {
   const stranger = await runPost(
     { message: { from: { id: 999 }, chat: { id: 999 }, text: "Сегодня" } },
     envOf(),
@@ -189,7 +189,22 @@ test("вебхук: чужое сообщение, незнакомый текс
     envOf(),
   );
   assert.equal(unknown.resp.status, 200);
-  assert.deepEqual(unknown.rec.calls, []);
+  assert.deepEqual(unknown.rec.calls, [
+    {
+      method: "sendMessage",
+      params: {
+        chat_id: 42,
+        text: "Не понял, кнопки ниже.",
+        reply_markup: {
+          keyboard: [
+            [{ text: "Сегодня" }, { text: "Завтра" }, { text: "Сейчас" }, { text: "Неделя" }],
+            [{ text: "Звонки" }, { text: "Выбрать день" }],
+          ],
+          resize_keyboard: true,
+        },
+      },
+    },
+  ]);
   const foreignChat = await runPost(
     { message: { from: { id: 42 }, chat: { id: 999 }, text: "Сегодня" } },
     envOf(),

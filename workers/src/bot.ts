@@ -20,7 +20,9 @@ import {
   BTN_TOMORROW,
   BTN_WEEK,
   GREETING,
+  HELP_TEXT,
   PICK_PROMPT,
+  UNKNOWN_TEXT,
   bellsText,
   calendarKb,
   dayText,
@@ -115,11 +117,17 @@ export class Bot {
       return;
     }
     if (text === "/start") {
-      await this.send(chatId, GREETING, mainKb(), undefined);
+      await this.send(chatId, GREETING, mainKb(), "HTML");
+      return;
+    }
+    if (text === "/help") {
+      await this.send(chatId, HELP_TEXT, mainKb(), "HTML");
       return;
     }
     if (!BUTTONS.includes(text)) {
-      return; // незнакомые тексты игнорируются молча
+      // незнакомый текст — короткая подсказка, а не молчание
+      await this.send(chatId, UNKNOWN_TEXT, mainKb(), undefined);
+      return;
     }
     const today = now.date;
     switch (text) {

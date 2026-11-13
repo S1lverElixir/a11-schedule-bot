@@ -228,8 +228,8 @@ WORKERS_TESTS = ["date", "schedule", "render", "ics", "parity", "handlers", "ind
 def check_workers():
     """Порт на Cloudflare Workers: тесты node, типы, статика нового кода.
 
-    Главный тест здесь — паритет: порт пересчитывает те же 7599 снимков видов
-    и 69 вызовов обработчиков против замороженных фикстур rust/tests/fixtures.
+    Главный тест здесь — паритет: порт пересчитывает те же 7600 снимков видов
+    и 70 вызовов обработчиков против замороженных фикстур rust/tests/fixtures.
     """
     section("ЛОКАЛЬНО: порт Workers — тесты, типы, статика")
     if not (WORKERS / "package.json").exists():
@@ -258,7 +258,7 @@ def check_workers():
         fail(f"node --test: rc={r.returncode}, провалено {failed} — порт расходится с эталоном\n{tail}")
     else:
         ok(f"порт Workers: {m_pass.group(1) if m_pass else '?'} тестов зелёные "
-           "(паритет 7599 видов и 69 вызовов внутри)")
+           "(паритет 7600 видов и 70 вызовов внутри)")
 
     if not (WORKERS / "node_modules" / "typescript").exists():
         warn("node_modules в workers нет (npm install) — типы не проверялись")

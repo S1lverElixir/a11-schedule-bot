@@ -18,6 +18,7 @@ import {
   BELLS,
   SEMESTER_END,
   SEMESTER_START,
+  cancelledNums,
   dayPairs,
   kind,
   weekLabel,
@@ -30,7 +31,14 @@ export const BTN_NOW = "Сейчас";
 export const BTN_WEEK = "Неделя";
 export const BTN_BELLS = "Звонки";
 export const BTN_PICK = "Выбрать день";
-export const GREETING = "Расписание группы А-11. Выбирай кнопками ниже.";
+/// Приветствие /start: короткая шапка и польза, без перечисления всех функций.
+export const GREETING =
+  "<b>Расписание группы А-11</b>\nДни, неделя, «Сейчас», звонки и календарь — кнопками ниже.\n<i>Утром в 07:30 приходит сводка дня.</i>";
+/// /help: карта возможностей — единственное место, где перечисление уместно.
+export const HELP_TEXT =
+  "<b>Что умеет бот</b>\nСегодня и Завтра — расписание дня с прогрессом.\nСейчас — что идёт и что дальше.\nНеделя — раскладка недели; стрелки листают, «Экспорт в календарь» даёт .ics.\nВыбрать день — календарь на месяц.\nЗвонки — таблица звонков.\n<i>Утром в 07:30 приходит сводка дня.</i>";
+/// Ответ на незнакомый текст владельца: короткая подсказка вместо молчания.
+export const UNKNOWN_TEXT = "Не понял, кнопки ниже.";
 export const PICK_PROMPT = "<b>Выбери день</b>";
 
 /// Экранирование HTML как `html.escape(s)` в Python (включая кавычки).
@@ -165,6 +173,11 @@ function progressBar(pairs: readonly Pair[], minutes: number): string {
   return out;
 }
 
+/// Строки отмен: «N-я пара отменена», по одной на слот.
+export function cancelLines(nums: readonly number[]): string[] {
+  return nums.map((n) => `<i>${n}-я пара отменена</i>`);
+}
+
 /// Диапазон дня «пары HH:MM–HH:MM»; для сегодня — с прогресс-баром в code-блоке.
 function daySpanBlock(pairs: readonly Pair[], minutesNow: number | null): string {
   const rng = `пары ${pairs[0]!.start}–${pairs[pairs.length - 1]!.end}`;
@@ -192,13 +205,23 @@ function statusLine(pairs: readonly Pair[], now: number): string {
   return "занятия окончены";
 }
 
-/// Сообщение одного дня: шапка, черта, диапазон (у сегодня — бар), блоки пар.
+/// Сообщение одного дня: шапка, черта, диапазон (у сегодня — бар), блоки пар;
+/// в пустом дне — подсказка «ближайшая пара», в конце — отменённые слоты.
 export function dayText(d: Date, suffix: string, now: Now): string {
   let head = `<b>${WD_FULL[d.weekday()]}, ${d.fmtDmy()}${esc(suffix)}</b>\nНеделя ${weekLabel(d)} чертой`;
+  const cancels = cancelLines(cancelledNums(d));
   const pairs = dayPairs(d);
   if (pairs.length === 0) {
     const line = d.equals(now.date) ? "сегодня пар нет" : "пар нет";
-    return `${head}\n\n<i>${line}</i>`;
+    let text = `${head}\n\n<i>${line}</i>`;
+    for (const cl of cancels) {
+      text += `\n\n${cl}`;
+    }
+    const next = nextDayFirstPair(d);
+    if (next !== null) {
+      text += `\n\n<blockquote>${nextPairHint(d, next[0], next[1])}</blockquote>`;
+    }
+    return text;
   }
   const today = d.equals(now.date);
   let status: string | null = null;
@@ -233,6 +256,9 @@ export function dayText(d: Date, suffix: string, now: Now): string {
     blocks = pairs.map((p) => pairBlock(p, null));
   }
   text += "\n\n" + blocks.join("\n\n");
+  for (const cl of cancels) {
+    text += `\n\n${cl}`;
+  }
   return text;
 }
 
@@ -428,12 +454,12 @@ export function mainKb(): ReplyKbValue {
   };
 }
 
-/// Кнопки под неделей: ‹ | экспорт в календарь | ›.
+/// Кнопки под неделей: ‹ | Экспорт в календарь | ›.
 export function weekKb(monday: Date): InlineKb {
   return new InlineKb([
     [
       btn("‹", `wk:${monday.addDays(-7).fmtIso()}`),
-      btn("экспорт в календарь", `ics:${monday.fmtIso()}`),
+      btn("Экспорт в календарь", `ics:${monday.fmtIso()}`),
       btn("›", `wk:${monday.addDays(7).fmtIso()}`),
     ],
   ]);
@@ -469,7 +495,7 @@ export function calendarKb(y: number, m: number, now: Now): InlineKb {
         const mark = cell.equals(today) ? "·" : "";
         row.push(
           btn(
-            `${cell.day()}${mark}`,
+            `${mark}${cell.day()}`,
             `cal:${pad4(cell.year())}-${pad2(cell.month())}:${pad2(cell.day())}`,
           ),
         );
@@ -523,5 +549,9 @@ export function morningText(d: Date, now: Now): string {
       lines.push(`${p.num} (${p.start}) ${title}${tail}`);
     }
   }
-  return `${head}\n${info}\n\n${lines.join("\n")}\n<i>${pairs.length} ${pairsWord(pairs.length)}</i>`;
+  let text = `${head}\n${info}\n\n${lines.join("\n")}\n<i>${pairs.length} ${pairsWord(pairs.length)}</i>`;
+  for (const cl of cancelLines(cancelledNums(d))) {
+    text += `\n${cl}`;
+  }
+  return text;
 }

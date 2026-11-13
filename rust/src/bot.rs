@@ -68,11 +68,17 @@ impl<A: Api> Bot<A> {
             }
         };
         if text == "/start" {
-            self.send(chat_id, render::GREETING, Some(render::main_kb()), None);
+            self.send(chat_id, render::GREETING, Some(render::main_kb()), Some("HTML"));
+            return;
+        }
+        if text == "/help" {
+            self.send(chat_id, render::HELP_TEXT, Some(render::main_kb()), Some("HTML"));
             return;
         }
         if !BUTTONS.contains(&text) {
-            return; // незнакомые тексты игнорируются молча
+            // незнакомый текст — короткая подсказка, а не молчание
+            self.send(chat_id, render::UNKNOWN_TEXT, Some(render::main_kb()), None);
+            return;
         }
         let today = now.date;
         match text {

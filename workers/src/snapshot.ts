@@ -8,6 +8,7 @@ import { Date, Stamp, type Now } from "./date.ts";
 import { icsForWeek } from "./ics.ts";
 import {
   GREETING,
+  HELP_TEXT,
   InlineKb,
   bellsText,
   calendarKb,
@@ -119,6 +120,7 @@ export function caseNames(): string[] {
   const mons = mondays();
 
   push("greeting");
+  push("help");
   push("main_kb");
   push("bells");
   for (let n = 0; n < 26; n++) {
@@ -235,6 +237,8 @@ export function valueFor(name: string): unknown {
   switch (parts[0]) {
     case "greeting":
       return GREETING;
+    case "help":
+      return HELP_TEXT;
     case "bells":
       return bellsText();
     case "pairs_word": {

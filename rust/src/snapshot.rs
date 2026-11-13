@@ -100,6 +100,7 @@ pub fn case_names() -> Vec<String> {
     let mons = mondays();
 
     push(&mut raw, "greeting".to_string());
+    push(&mut raw, "help".to_string());
     push(&mut raw, "main_kb".to_string());
     push(&mut raw, "bells".to_string());
     for n in 0..26 {
@@ -234,6 +235,7 @@ pub fn value_for(name: &str) -> Option<Value> {
     let parts: Vec<&str> = name.split('|').collect();
     let v = match parts[0] {
         "greeting" => Value::String(render::GREETING.to_string()),
+        "help" => Value::String(render::HELP_TEXT.to_string()),
         "bells" => Value::String(render::bells_text()),
         "pairs_word" => Value::String(render::pairs_word(parts[1].parse().ok()?).to_string()),
         "main_kb" => reply_rows_value(),
