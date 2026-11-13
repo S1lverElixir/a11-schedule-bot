@@ -57,30 +57,18 @@ jobs:
       # Хостинг забирает бота из репозитория: run.py запускает rust/bin/a11-bot.
       # Свежий бинарник коммитится сюда же, иначе прод останется на старом коде.
       - name: положить бинарник в репозиторий
-        id: bin
         run: |
           cp rust/target/x86_64-unknown-linux-musl/release/a11-bot rust/bin/a11-bot
           if git diff --quiet -- rust/bin/a11-bot; then
-            echo "changed=0" >> "$GITHUB_OUTPUT"
             echo "бинарник не изменился"
             exit 0
           fi
-          echo "changed=1" >> "$GITHUB_OUTPUT"
           git config user.name "a11-bot"
           git config user.email "a11-bot@users.noreply.github.com"
           git add rust/bin/a11-bot
           git commit -m "rust: бинарник пересобран из ${GITHUB_SHA::7}"
           git push
 
-      # Пуш от GITHUB_TOKEN не запускает другие workflow, поэтому перезапуск
-      # просим у панели прямо здесь: контейнер подтянет новый бинарник.
-      - name: перезапустить сервер с новым бинарником
-        if: steps.bin.outputs.changed == '1'
-        run: |
-          curl -sf --max-time 30 -X POST \
-            "https://panel.fps.ms/api/client/servers/1438731f/power" \
-            -H "Authorization: Bearer ${{ secrets.FPSMS_API_KEY }}" \
-            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36" \
-            -H "Content-Type: application/json" \
-            -d '{"signal": "restart"}' > /dev/null
-          echo "restart requested"
+      # Рестарт панели fps.ms убран: прод переехал на Cloudflare Workers и
+      # деплоится вручную (npx wrangler deploy из workers/). Rust-сборка остаётся
+      # запаской: свежий бинарник лежит в rust/bin/a11-bot и в релизе rust-latest.

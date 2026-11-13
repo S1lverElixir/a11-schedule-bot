@@ -320,6 +320,74 @@ def check_workers():
         fail("нет workers/wrangler.jsonc")
 
 
+WORKER_URL = "https://a11-bot.egor-kuzko-04.workers.dev"
+
+
+def check_workers_prod(env):
+    section("ПРОД: воркер на Cloudflare Workers (URL, вебхук, команды)")
+    if not env.get("BOT_TOKEN"):
+        warn("нет BOT_TOKEN в .env — прод-проверки воркера пропущены")
+        return
+    try:
+        with urllib.request.urlopen(WORKER_URL, timeout=30) as r:
+            body = r.read().decode("utf-8", "replace")
+        if r.status == 200 and "a11-bot worker" in body:
+            ok(f"воркер отвечает 200: {WORKER_URL}")
+        else:
+            fail(f"воркер ответил {r.status}, тело не распознано")
+    except Exception as e:
+        fail(f"воркер недоступен: {e.__class__.__name__}: {str(e)[:120]}")
+        return
+    try:
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{env['BOT_TOKEN']}/getWebhookInfo",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = json.loads(r.read().decode("utf-8"))
+        if not data.get("ok"):
+            fail("getWebhookInfo вернул ok=false")
+            return
+        info = data.get("result", {})
+        url = info.get("url", "")
+        if url == WORKER_URL:
+            ok("вебхук указывает на воркер")
+        else:
+            fail(f"вебхук указывает не на воркер: {url!r}")
+        if info.get("last_error_message"):
+            # поле живёт и после восстановления: свежесть решает, fail это или память
+            age = time.time() - int(info.get("last_error_date", 0))
+            if age < 3600:
+                fail(f"свежая ошибка доставки: {info.get('last_error_message')}")
+            else:
+                warn(f"устаревшая ошибка доставки ({age // 3600} ч назад): {info.get('last_error_message')}")
+        else:
+            ok("ошибок доставки вебхука нет")
+        pending = info.get("pending_update_count", 0)
+        if pending:
+            warn(f"в очереди вебхука {pending} апдейтов")
+        else:
+            ok("очередь вебхука пуста")
+    except Exception as e:
+        fail(f"getWebhookInfo: {e.__class__.__name__}: {str(e)[:120]}")
+    try:
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{env['BOT_TOKEN']}/getMyCommands",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = json.loads(r.read().decode("utf-8"))
+        cmds = [c.get("command") for c in (data.get("result") or [])]
+        if cmds == ["start", "help"]:
+            ok("меню команд: /start, /help")
+        else:
+            warn(f"меню команд: {cmds or 'пусто'}")
+    except Exception as e:
+        warn(f"getMyCommands: {e.__class__.__name__}: {str(e)[:120]}")
+
+
 def check_prod(env):
     section("ПРОД: живость бота (409-тест, timeout>=5 обязателен)")
     token = env.get("BOT_TOKEN")
@@ -341,9 +409,9 @@ def check_prod(env):
         except Exception:
             pass
     if alive:
-        ok("409 получен — long polling жив")
+        ok("409 получен — канал Telegram жив (polling или активный вебхук)")
     else:
-        fail("409 не получен — прод-бот не держит polling (панель fps.ms, логи)")
+        fail("409 не получен — прод-бот не держит ни polling, ни вебхук")
 
 
 def check_deploy():
@@ -392,8 +460,13 @@ def check_panel(env):
         up_txt = f", uptime {up / 3_600_000:.1f} ч" if up is not None else ""
         if state == "running" and not suspended:
             ok(f"контейнер running, память {mem:.0f} МБ{up_txt}")
+        elif suspended:
+            fail(f"контейнер suspended")
+        elif state == "stopped":
+            # штатное состояние после переключения на Workers: запаска выключена
+            warn("контейнер stopped — переключено на Workers, запаска выключена")
         else:
-            fail(f"контейнер {state}, suspended={suspended}")
+            fail(f"контейнер {state}")
         if mem >= 120:
             fail(f"память контейнера {mem:.0f} МБ — у лимита 128 МБ")
     except Exception as e:
@@ -416,6 +489,7 @@ def main():
         env = load_env()
         check_prod(env)
         check_deploy()
+        check_workers_prod(env)
         check_panel(env)
 
     print(f"\n=== ИТОГ: FAIL={len(FAILS)}, WARN={len(WARNS)} ===")

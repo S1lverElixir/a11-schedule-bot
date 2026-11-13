@@ -56,12 +56,18 @@ async function readStdinLines(count) {
   const it = rl[Symbol.asyncIterator]();
   const out = [];
   while (out.length < count) {
+    let got = false;
     for await (const line of it) {
       const t = line.trim();
       if (t !== "") {
         out.push(t);
+        got = true;
         break;
       }
+    }
+    if (!got) {
+      // stdin кончился раньше нужного числа строк — висеть нельзя
+      return out;
     }
   }
   rl.close();
@@ -101,6 +107,11 @@ const resp = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
 const body = await resp.json().catch(() => null);
 if (body?.ok === true) {
   console.log("вебхук установлен:", url);
+  // подтвердить, какому именно боту встал вебхук: токен не печатается
+  const me = await fetch(`https://api.telegram.org/bot${token}/getMe`)
+    .then((r) => r.json())
+    .catch(() => null);
+  console.log("бот:", me?.ok ? `@${me.result.username}` : "getMe не ответил");
 } else {
   console.error("setWebhook не прошёл:", body?.description ?? `HTTP ${resp.status}`);
   process.exit(1);

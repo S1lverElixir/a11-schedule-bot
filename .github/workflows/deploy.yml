@@ -1,18 +1,16 @@
 name: deploy
 
+# Прод живёт на Cloudflare Workers и деплоится вручную: npx wrangler deploy
+# из workers/. Рестарты fps.ms больше не нужны; этот workflow оставлен как
+# метка на каждый пуш, чтобы старый рестарт не вернулся случайно.
+
 on:
   push:
     branches: [main]
 
 jobs:
-  restart:
+  note:
     runs-on: ubuntu-latest
     steps:
-      - name: Restart fps.ms server (pull + run latest commit)
-        run: |
-          curl -sf --max-time 30 -X POST \
-            "https://panel.fps.ms/api/client/servers/1438731f/power" \
-            -H "Authorization: Bearer ${{ secrets.FPSMS_API_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d '{"signal": "restart"}' > /dev/null
-          echo "restart requested; сервер перезапустится и сам сделает git pull"
+      - name: Воркер деплоится вручную, fps.ms больше не рестартует
+        run: echo "деплой воркера вручную: npx wrangler deploy (из workers/); панель fps.ms не трогается"

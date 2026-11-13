@@ -11,26 +11,33 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - name: Check bot is polling, alert owner if not
+      - name: Check bot is reachable (webhook on Workers), alert owner if not
         run: |
           TOKEN="${{ secrets.BOT_TOKEN }}"
           CHAT="${{ secrets.MY_TELEGRAM_ID }}"
           check() {
-            # живой polling-бот держит getUpdates => наш запрос получает 409.
+            # живой polling-бот и активный вебхук отвечают на getUpdates одинаково:
+            # 409 «конфликт» — значит Telegram-канал занят и канал доставки жив.
             # Ищем именно '"error_code":409': подстрока «409» может случайно попасться
             # в update_id или тексте очереди апдейтов, когда бот мёртв
             curl -s --max-time 30 "https://api.telegram.org/bot${TOKEN}/getUpdates?timeout=5" | grep -q '"error_code":409'
           }
           if check || { sleep 60 && check; }; then
-            echo "bot is polling: OK"
+            echo "bot is reachable: OK"
+            # канал занят, но доставку в вебхук 409 не проверяет: свежая ошибка
+            # доставки при живом вебхуке — тоже тревога (устаревшая — нет)
+            info=$(curl -s --max-time 30 "https://api.telegram.org/bot${TOKEN}/getWebhookInfo")
+            echo "$info" | grep -q '"last_error_date"' && \
+              recent=$(echo "$info" | python3 -c "import json,sys,time; d=json.load(sys.stdin)['result']; print(1 if d.get('last_error_date',0) > time.time()-1800 else 0)") && \
+              [ "$recent" = "1" ] && {
+                echo "webhook delivery failing, sending alert"
+                curl -s --max-time 30 "https://api.telegram.org/bot${TOKEN}/sendMessage" \
+                  -d chat_id="${CHAT}" \
+                  --data-urlencode "text=Вебхук воркера не доставляет апдейты (healthcheck). Смотри getWebhookInfo и npx wrangler tail (workers/)." > /dev/null
+              } || true
           else
             echo "bot is DOWN, sending alert"
             curl -s --max-time 30 "https://api.telegram.org/bot${TOKEN}/sendMessage" \
               -d chat_id="${CHAT}" \
-              --data-urlencode "text=Бот не отвечает (healthcheck). Проверь панель fps.ms, возможно нужен перезапуск." > /dev/null
-            # попытка самопомощи: рестарт сервера через панель
-            curl -sf --max-time 30 -X POST "https://panel.fps.ms/api/client/servers/1438731f/power" \
-              -H "Authorization: Bearer ${{ secrets.FPSMS_API_KEY }}" \
-              -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36" \
-              -H "Content-Type: application/json" -d '{"signal": "restart"}' > /dev/null || true
+              --data-urlencode "text=Бот не отвечает (healthcheck). Проверь воркер: npx wrangler tail (workers/), getWebhookInfo, панель Cloudflare." > /dev/null
           fi
