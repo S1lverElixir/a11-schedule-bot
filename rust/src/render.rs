@@ -16,9 +16,10 @@ pub const BTN_WEEK: &str = "Неделя";
 pub const BTN_BELLS: &str = "Звонки";
 pub const BTN_PICK: &str = "Выбрать день";
 /// Приветствие /start: короткая шапка и польза, без перечисления всех функций.
-pub const GREETING: &str = "<b>Расписание группы А-11</b>\nДни, неделя, «Сейчас», звонки и календарь — кнопками ниже.\n<i>Утром в 07:30 приходит сводка дня.</i>";
-/// /help: карта возможностей — единственное место, где перечисление уместно.
-pub const HELP_TEXT: &str = "<b>Что умеет бот</b>\nСегодня и Завтра — расписание дня с прогрессом.\nСейчас — что идёт и что дальше.\nНеделя — раскладка недели; стрелки листают, «Экспорт в календарь» даёт .ics.\nВыбрать день — календарь на месяц.\nЗвонки — таблица звонков.\n<i>Утром в 07:30 приходит сводка дня.</i>";
+pub const GREETING: &str = "<b>Расписание группы А-11</b>\nДни, неделя, звонки и календарь — кнопками ниже.\n<i>Утром в 07:30 приходит сводка дня.</i>";
+/// /help: карта возможностей — единственное место, где перечисление уместно;
+/// названия кнопок в «ёлочках», как они выглядят в клавиатуре.
+pub const HELP_TEXT: &str = "<b>Что умеет бот</b>\n«Сегодня» и «Завтра» — расписание дня; у «Сегодня» ещё и прогресс-бар.\n«Сейчас» — что идёт и что дальше.\n«Неделя» — раскладка недели; стрелки листают, «Экспорт в календарь» даёт .ics.\n«Выбрать день» — календарь на месяц.\n«Звонки» — время звонков и перемен.\n<i>Утром в 07:30 приходит сводка дня.</i>";
 /// Ответ на незнакомый текст владельца: короткая подсказка вместо молчания.
 pub const UNKNOWN_TEXT: &str = "Не понял, кнопки ниже.";
 pub const PICK_PROMPT: &str = "<b>Выбери день</b>";
@@ -589,7 +590,12 @@ pub fn morning_text(d: Date, now: Now) -> String {
     );
     let pairs = day_pairs(d);
     if pairs.is_empty() {
-        return format!("{head}\n\n<i>сегодня пар нет</i>");
+        let mut text = format!("{head}\n\n<i>сегодня пар нет</i>");
+        for cl in cancel_lines(&cancelled_nums(d)) {
+            text.push('\n');
+            text.push_str(&cl);
+        }
+        return text;
     }
     let gap = hm(pairs[0].start) as i64 - now.minute as i64;
     let mut info = day_span_block(&pairs, Some(now.minute));
@@ -668,5 +674,31 @@ mod tests {
         // случай с отменой проверяется через cancel_lines и придёт с данными
         let d = Date::parse_iso("2026-12-16").expect("дата");
         assert!(cancelled_nums(d).is_empty());
+    }
+
+    #[test]
+    fn empty_day_inside_semester_hints_the_next_pair() {
+        let now = Now {
+            date: Date::parse_iso("2026-10-23").expect("дата"),
+            minute: 720,
+        };
+        let sunday = day_text(Date::parse_iso("2026-10-25").expect("дата"), "", now);
+        assert!(sunday.contains("<i>пар нет</i>"));
+        assert!(sunday.contains("<blockquote>завтра:"));
+        let vacation = day_text(Date::parse_iso("2027-01-05").expect("дата"), "", now);
+        assert!(vacation.contains("<i>пар нет</i>"));
+        assert!(!vacation.contains("<blockquote>"));
+    }
+
+    #[test]
+    fn cancellation_mark_does_not_break_a_day_with_pairs() {
+        let now = Now {
+            date: Date::parse_iso("2026-12-16").expect("дата"),
+            minute: 720,
+        };
+        let text = day_text(Date::parse_iso("2026-12-16").expect("дата"), "", now);
+        assert!(text.contains("Час куратора"));
+        assert!(text.contains(" · замена"));
+        assert!(!text.contains("отменена"));
     }
 }

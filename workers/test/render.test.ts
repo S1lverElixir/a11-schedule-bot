@@ -3,7 +3,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { cancelLines, dayText, esc, fmtMinutes, fmtRooms, pairsWord } from "../src/render.ts";
+import { cancelledNums } from "../src/schedule.ts";
 import { Date, type Now } from "../src/date.ts";
+
+test("отменённых слотов в данных пока нет — cancelledNums пуст", () => {
+  assert.deepEqual(cancelledNums(Date.parseIso("2026-12-16")!), []);
+});
 
 test("округление половины к чётному совпадает с Python", () => {
   // сама функция приватна; проверяем через поведенческие случаи ниже и паритет
@@ -52,7 +57,7 @@ test("отменённые пары: по строке «N-я пара отме�
   ]);
 });
 
-test("пустой день внутри семестра даёт подсказку «ближайшая пара»", () => {
+test("пустой день внутри семестра получает подсказку о ближайших парах", () => {
   const now: Now = { date: Date.parseIso("2026-10-23")!, minute: 720 };
   const sunday = dayText(Date.parseIso("2026-10-25")!, "", now);
   assert.ok(sunday.includes("<i>пар нет</i>"));
