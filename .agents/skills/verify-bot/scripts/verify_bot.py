@@ -329,12 +329,17 @@ def check_workers_prod(env):
         warn("нет BOT_TOKEN в .env — прод-проверки воркера пропущены")
         return
     try:
-        with urllib.request.urlopen(WORKER_URL, timeout=30) as r:
-            body = r.read().decode("utf-8", "replace")
-        if r.status == 200 and "a11-bot worker" in body:
+        # workers.dev за Cloudflare: urllib получает 403, curl с браузерным UA проходит
+        r = subprocess.run(
+            ["curl", "-s", "--max-time", "30", "-w", "\n%{http_code}", WORKER_URL,
+             "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                   "AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36"],
+            capture_output=True, text=True, timeout=40)
+        body, _, code = r.stdout.rpartition("\n")
+        if code == "200" and "a11-bot worker" in body:
             ok(f"воркер отвечает 200: {WORKER_URL}")
         else:
-            fail(f"воркер ответил {r.status}, тело не распознано")
+            fail(f"воркер ответил {code or r.returncode}, тело не распознано")
     except Exception as e:
         fail(f"воркер недоступен: {e.__class__.__name__}: {str(e)[:120]}")
         return
@@ -450,6 +455,14 @@ def check_panel(env):
              "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0.0.0 Safari/537.36"],
             capture_output=True, text=True, timeout=30)
         data = json.loads(r.stdout)
+        if isinstance(data, dict) and data.get("errors"):
+            detail = json.dumps(data["errors"], ensure_ascii=False)
+            if "suspend" in detail.lower() or "ServerStateConflict" in detail:
+                # после переезда на Workers это ожидаемо: срок сервера истёк
+                warn("панель: сервер suspended — срок истёк, прод живёт на Workers")
+                return
+            fail(f"панель: непонятная ошибка {detail[:150]}")
+            return
         a = data.get("attributes", {})
         res = a.get("resources", {})
         mem = res.get("memory_bytes", 0) / 1048576
@@ -461,7 +474,9 @@ def check_panel(env):
         if state == "running" and not suspended:
             ok(f"контейнер running, память {mem:.0f} МБ{up_txt}")
         elif suspended:
-            fail(f"контейнер suspended")
+            # после переключения на Workers это ожидаемо: срок сервера истёк,
+            # контейнер не работает, продление ручное и нужно только для отката
+            warn("контейнер suspended — сервер приостановлен, прод живёт на Workers")
         elif state == "stopped":
             # штатное состояние после переключения на Workers: запаска выключена
             warn("контейнер stopped — переключено на Workers, запаска выключена")
