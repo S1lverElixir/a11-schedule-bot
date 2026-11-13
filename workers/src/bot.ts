@@ -105,6 +105,11 @@ export class Bot {
       log.warn("сообщение без chat_id");
       return;
     }
+    // страховка поверх фильтра от: писать только в личку владельца
+    if (chatId !== this.ownerId) {
+      log.warn("сообщение не из чата владельца");
+      return;
+    }
     if (text === "/start") {
       await this.send(chatId, GREETING, mainKb(), undefined);
       return;
@@ -185,6 +190,11 @@ export class Bot {
       | undefined;
     const chatId =
       typeof msg?.chat?.id === "number" ? msg.chat.id : this.ownerId;
+    // страховка поверх фильтра от: кнопки живут только в личке владельца
+    if (chatId !== this.ownerId) {
+      log.warn("нажатие не из чата владельца");
+      return;
+    }
     switch (parts[0]) {
       case "cal": {
         const ym = Date.parseMonth(parts[1] ?? "");

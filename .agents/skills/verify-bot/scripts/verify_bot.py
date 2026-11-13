@@ -222,7 +222,7 @@ def check_data(src):
 
 # ---------------------------------------------------------------- сеть
 WORKERS = ROOT / "workers"
-WORKERS_TESTS = ["date", "schedule", "render", "ics", "parity", "handlers"]
+WORKERS_TESTS = ["date", "schedule", "render", "ics", "parity", "handlers", "index"]
 
 
 def check_workers():
@@ -283,6 +283,12 @@ def check_workers():
     else:
         fail(f"в workers/src/bot.ts проверок на owner — {guards}, нужно минимум 2")
 
+    chats = len(re.findall(r"chatId !== this\.ownerId", wsrc.get("bot", "")))
+    if chats >= 2:
+        ok(f"страховка chat_id в порте обработчиков ({chats} проверки)")
+    else:
+        fail(f"в workers/src/bot.ts страховок chat_id — {chats}, нужно минимум 2")
+
     bad = [f"{name}: {m.group(0)!r}"
            for name, text in wsrc.items()
            for m in [EMOJI.search(text)] if m]
@@ -291,10 +297,13 @@ def check_workers():
     else:
         ok("эмодзи в строках воркера нет")
 
-    if "X-Telegram-Bot-Api-Secret-Token" in wsrc.get("index", ""):
-        ok("вебхук проверяет секретный заголовок Telegram")
-    else:
+    idx_src = wsrc.get("index", "")
+    if "X-Telegram-Bot-Api-Secret-Token" not in idx_src:
         fail("в workers/src/index.ts нет проверки секрета вебхука")
+    elif "crypto.subtle" not in idx_src or "secretOk" not in idx_src:
+        fail("секрет вебхука сверяется не constant-time (нужны crypto.subtle и secretOk)")
+    else:
+        ok("вебхук: секретный заголовок, constant-time сверка, fail-closed (тесты index)")
 
     if re.search(r"\b\d{8,}:[A-Za-z0-9_-]{30,}\b", wall):
         fail("в workers/src похоже на литерал токена бота — секреты в коде запрещены")

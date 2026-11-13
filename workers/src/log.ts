@@ -7,9 +7,10 @@ import { localStamp } from "./date.ts";
 
 let secret = "";
 
-/// Первый вызов выигрывает, как OnceLock в Rust.
+/// Первый непустой токен выигрывает: запрос с пустым секретом (ещё не подвязан)
+/// не должен раз и навсегда оставить скраббер выключенным.
 export function setSecret(s: string): void {
-  if (secret === "") secret = s;
+  if (secret === "" && s !== "") secret = s;
 }
 
 export function info(msg: string): void {
