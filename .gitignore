@@ -7,4 +7,5 @@ rust/target/
 .rust-check.txt
 workers/node_modules/
 workers/.wrangler/
+workers/.dev.vars
 .zcode/

@@ -312,10 +312,10 @@ def check_workers():
 
     try:
         cfg = (WORKERS / "wrangler.jsonc").read_text(encoding="utf-8")
-        if "30 4 * * *" in cfg:
-            ok("крон сводки: 04:30 UTC = 07:30 по Минску")
+        if "30 4 * * *" in cfg and "50 4 * * *" in cfg:
+            ok("крон сводки: два слота 04:30/04:50 UTC = 07:30/07:50 по Минску")
         else:
-            fail("в workers/wrangler.jsonc нет крона 30 4 * * *")
+            fail("в workers/wrangler.jsonc нет двух слотов крона 30/50 4 * * *")
     except OSError:
         fail("нет workers/wrangler.jsonc")
 

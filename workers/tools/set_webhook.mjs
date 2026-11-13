@@ -1,12 +1,14 @@
 //! Установка вебхука на воркер. Токен читает сам из .env в корне репозитория
-//! и не печатает его; выводит только ответ Telegram.
+//! и не печатает его; выводит только ответ Telegram. Секрет вебхука через
+//! argv не принимается: он остался бы в истории PowerShell и в списке процессов,
+//! поэтому всегда идёт через stdin.
 //!
-//! Запуск из корня репозитория:
-//!   node workers/tools/set_webhook.mjs <адрес-воркера> <секрет-вебхука>
+//! Запуск из корня репозитория (секрет — первой строкой stdin):
+//!   node workers/tools/set_webhook.mjs <адрес-воркера>
 //!
 //! Для тестового бота (его токена в .env нет) добавь флаг --stdin и вставь
-//! токен первой строкой:
-//!   node workers/tools/set_webhook.mjs <адрес-воркера> <секрет-вебхука> --stdin
+//! две строки: токен, затем секрет:
+//!   node workers/tools/set_webhook.mjs <адрес-воркера> --stdin
 //!
 //! Секрет — тот же, что в секретe WEBHOOK_SECRET воркера (npx wrangler secret put).
 
@@ -14,9 +16,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 
-const [url, secret, flag] = process.argv.slice(2);
-if (!url || !secret) {
-  console.error("нужны два аргумента: адрес воркера и секрет вебхука");
+const [url, flag] = process.argv.slice(2);
+if (!url) {
+  console.error("нужен аргумент: адрес воркера");
   process.exit(1);
 }
 
@@ -49,25 +51,42 @@ function readToken() {
   return null;
 }
 
-async function readTokenStdin() {
+async function readStdinLines(count) {
   const rl = createInterface({ input: process.stdin });
   const it = rl[Symbol.asyncIterator]();
-  for await (const line of it) {
-    const t = line.trim();
-    if (t !== "") {
-      rl.close();
-      return t;
+  const out = [];
+  while (out.length < count) {
+    for await (const line of it) {
+      const t = line.trim();
+      if (t !== "") {
+        out.push(t);
+        break;
+      }
     }
   }
-  return null;
+  rl.close();
+  return out;
 }
 
-const token = flag === "--stdin" ? await readTokenStdin() : readToken();
-if (!token) {
-  console.error(
-    flag === "--stdin" ? "токен не введён" : "в .env нет BOT_TOKEN",
-  );
-  process.exit(1);
+let token;
+let secret;
+if (flag === "--stdin") {
+  [token, secret] = await readStdinLines(2);
+  if (!token || !secret) {
+    console.error("stdin должен дать две строки: токен и секрет вебхука");
+    process.exit(1);
+  }
+} else {
+  token = readToken();
+  if (!token) {
+    console.error("в .env нет BOT_TOKEN");
+    process.exit(1);
+  }
+  [secret] = await readStdinLines(1);
+  if (!secret) {
+    console.error("секрет вебхука не введён (первая строка stdin)");
+    process.exit(1);
+  }
 }
 
 const resp = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {

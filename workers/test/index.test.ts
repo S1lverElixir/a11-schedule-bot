@@ -282,6 +282,27 @@ test("сводка: окно — до 07:28 и после 09:00 не отпра�
   assert.equal(tg.calls.length, 0);
 });
 
+test("сводка: границы окна и семестра включительны", async () => {
+  // 07:28 — первый годный момент, 08:59 — последний; 07:27 и 09:00 уже нет
+  const t1 = new RecordingTg();
+  assert.equal(await cronSummary(kvEnv(new FakeKv()), nowAt("2026-11-13", 448), 42, t1), "sent");
+  const t2 = new RecordingTg();
+  assert.equal(await cronSummary(kvEnv(new FakeKv()), nowAt("2026-11-13", 539), 42, t2), "sent");
+  const t3 = new RecordingTg();
+  assert.equal(await cronSummary(kvEnv(new FakeKv()), nowAt("2026-11-13", 540), 42, t3), "window");
+  const t4 = new RecordingTg();
+  assert.equal(await cronSummary(kvEnv(new FakeKv()), nowAt("2026-11-13", 447), 42, t4), "window");
+  // края семестра: 01.09 и 31.12 — внутри, 31.08 и 01.01 — снаружи
+  const t5 = new RecordingTg();
+  assert.equal(await cronSummary(kvEnv(new FakeKv()), nowAt("2026-09-01", 450), 42, t5), "sent");
+  const t6 = new RecordingTg();
+  assert.equal(await cronSummary(kvEnv(new FakeKv()), nowAt("2026-12-31", 450), 42, t6), "sent");
+  const t7 = new RecordingTg();
+  assert.equal(await cronSummary(kvEnv(new FakeKv()), nowAt("2026-08-31", 450), 42, t7), "outside");
+  const t8 = new RecordingTg();
+  assert.equal(await cronSummary(kvEnv(new FakeKv()), nowAt("2027-01-01", 450), 42, t8), "outside");
+});
+
 test("сводка: первый запуск в окне отправляет и ставит отметку в KV", async () => {
   const kv = new FakeKv();
   const tg = new RecordingTg();

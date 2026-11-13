@@ -89,7 +89,9 @@ interface SummaryTg {
 }
 
 /// Утренняя сводка: семестр, окно, дедупликация. Отметка в KV ставится только
-/// после успешной отправки — сбой повторяется со следующим запуском в окне.
+/// после успешной отправки — сбой ловит второй слот крона (50 4) в том же окне.
+/// Крон платформы — at-least-once, а KV согласуется в итоге: при редком
+/// параллельном дубле запуска сводка уйдёт дважды; честнее этого KV не умеет.
 /// Результат — буквальный, чтобы тесты проверяли каждую ветку.
 export async function cronSummary(
   env: Env,
@@ -173,6 +175,7 @@ export async function handleWebhook(
     return new Response("", { status: 405 });
   }
   if (!(await secretOk(env.WEBHOOK_SECRET, request.headers.get("X-Telegram-Bot-Api-Secret-Token")))) {
+    log.warn("вебхук: секрет не совпал");
     return new Response("", { status: 401 });
   }
   const length = Number(request.headers.get("content-length") ?? "0");
