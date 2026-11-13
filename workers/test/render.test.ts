@@ -61,7 +61,8 @@ test("пустой день внутри семестра получает по�
   const now: Now = { date: Date.parseIso("2026-10-23")!, minute: 720 };
   const sunday = dayText(Date.parseIso("2026-10-25")!, "", now);
   assert.ok(sunday.includes("<i>пар нет</i>"));
-  assert.ok(sunday.includes("<blockquote>завтра:"));
+  // подсказка всегда называет день явно: в дне «· завтра» второе «завтра» путает
+  assert.ok(sunday.includes("<blockquote>ближайшая пара: понедельник, 26.10,"));
   // в каникулах пар нет и в пределах недели — подсказки нет
   const vacation = dayText(Date.parseIso("2027-01-05")!, "", now);
   assert.ok(vacation.includes("<i>пар нет</i>"));

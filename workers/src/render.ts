@@ -37,7 +37,7 @@ export const GREETING =
 /// /help: карта возможностей — единственное место, где перечисление уместно;
 /// названия кнопок в «ёлочках», как они выглядят в клавиатуре.
 export const HELP_TEXT =
-  "<b>Что умеет бот</b>\n«Сегодня» и «Завтра» — расписание дня; у «Сегодня» ещё и прогресс-бар.\n«Сейчас» — что идёт и что дальше.\n«Неделя» — раскладка недели; стрелки листают, «Экспорт в календарь» даёт .ics.\n«Выбрать день» — календарь на месяц.\n«Звонки» — время звонков и перемен.\n<i>Утром в 07:30 приходит сводка дня.</i>";
+  "<b>Что умеет бот</b>\n«Сегодня» — расписание дня с прогресс-баром, «Завтра» — расписание дня.\n«Сейчас» — что идёт и что дальше.\n«Неделя» — раскладка недели; стрелки листают, «В календарь» даёт .ics.\n«Выбрать день» — календарь на месяц.\n«Звонки» — время звонков и перемен.\n<i>Утром в 07:30 приходит сводка дня.</i>";
 /// Ответ на незнакомый текст владельца: короткая подсказка вместо молчания.
 export const UNKNOWN_TEXT = "Не понял, кнопки ниже.";
 export const PICK_PROMPT = "<b>Выбери день</b>";
@@ -220,7 +220,7 @@ export function dayText(d: Date, suffix: string, now: Now): string {
     }
     const next = nextDayFirstPair(d);
     if (next !== null) {
-      text += `\n\n<blockquote>${nextPairHint(d, next[0], next[1])}</blockquote>`;
+      text += `\n\n<blockquote>${nextPairHint(d, next[0], next[1], true)}</blockquote>`;
     }
     return text;
   }
@@ -276,12 +276,14 @@ function nextDayFirstPair(after: Date): [Date, Pair] | null {
 }
 
 /// Текст-подсказка «завтра: …» / «ближайшая пара: …» без обёртки blockquote.
-function nextPairHint(d: Date, nd: Date, first: Pair): string {
+/// nearest всегда называет день явно — в дне с пометкой «· завтра» второе
+/// «завтра» читается как тот же день и путает.
+function nextPairHint(d: Date, nd: Date, first: Pair, nearest = false): string {
   const rooms =
     first.rooms !== null && first.rooms !== ""
       ? `, ауд. ${fmtRooms(first.rooms)}`
       : "";
-  if (nd.daysSince(d) === 1) {
+  if (!nearest && nd.daysSince(d) === 1) {
     return `завтра: ${first.num}-я пара в ${first.start} — ${esc(first.subj)}${rooms}`;
   }
   return `ближайшая пара: ${wdLower(nd.weekday())}, ${nd.fmtDm()}, ${first.num}-я пара в ${first.start} — ${esc(first.subj)}${rooms}`;
@@ -290,7 +292,7 @@ function nextPairHint(d: Date, nd: Date, first: Pair): string {
 /// Кнопка «Сейчас»: что происходит прямо сейчас и что дальше.
 export function nowText(now: Now): string {
   const d = now.date;
-  let head = `<b>Сейчас ${hhMm(now)} · ${WD_FULL[d.weekday()]}, ${d.fmtDm()}</b>\nНеделя ${weekLabel(d)} чертой`;
+  let head = `<b>Сейчас ${hhMm(now)} · ${WD_FULL[d.weekday()]}, ${d.fmtDmy()}</b>\nНеделя ${weekLabel(d)} чертой`;
   const pairs = dayPairs(d);
   if (pairs.length === 0) {
     let text = `${head}\n\n<i>сегодня пар нет</i>`;
@@ -323,7 +325,10 @@ export function nowText(now: Now): string {
   if (upcoming !== -1) {
     const p = pairs[upcoming]!;
     const gap = hm(p.start) - now.minute;
-    const label = upcoming === 0 ? "до первой пары" : "перемена";
+    // та же формулировка, что и статусная строка дня: «10 мин» — это остаток,
+    // а не длительность перемены
+    const label =
+      upcoming === 0 ? "до первой пары" : `перемена, до ${p.num}-й пары`;
     return `${head}\n\n<i>${label} ${fmtMinutes(gap)}</i>\n\n${pairBlock(p, null)}`;
   }
   let text = `${head}\n\n<i>занятия окончены</i>`;
@@ -365,8 +370,9 @@ export function renderWeek(monday: Date, now: Now): string {
     if (idx.length === 1) {
       lines.push(`<b>${wd} ${days[idx[0]]!.fmtDm()}${mark}</b>`);
     } else {
+      // у каждого выходного своё имя рядом с датой — «Сб 14.11 · Вс 15.11»
       lines.push(
-        `<b>${wd} ${days[idx[0]]!.fmtDm()} · ${days[idx[1]]!.fmtDm()}${mark}</b>`,
+        `<b>${WD_SHORT[idx[0]]} ${days[idx[0]]!.fmtDm()} · ${WD_SHORT[idx[1]]} ${days[idx[1]]!.fmtDm()}${mark}</b>`,
       );
     }
     const pairs = lists[idx[0]]!;
@@ -455,12 +461,13 @@ export function mainKb(): ReplyKbValue {
   };
 }
 
-/// Кнопки под неделей: ‹ | Экспорт в календарь | ›.
+/// Кнопки под неделей: ‹ | В календарь | ›. Подпись короткая — длинная
+/// обрезалась клиентом посреди ряда.
 export function weekKb(monday: Date): InlineKb {
   return new InlineKb([
     [
       btn("‹", `wk:${monday.addDays(-7).fmtIso()}`),
-      btn("Экспорт в календарь", `ics:${monday.fmtIso()}`),
+      btn("В календарь", `ics:${monday.fmtIso()}`),
       btn("›", `wk:${monday.addDays(7).fmtIso()}`),
     ],
   ]);
@@ -536,6 +543,11 @@ export function morningText(d: Date, now: Now): string {
     let text = `${head}\n\n<i>сегодня пар нет</i>`;
     for (const cl of cancelLines(cancelledNums(d))) {
       text += `\n${cl}`;
+    }
+    // единообразие с пустым днём: подсказка и здесь
+    const next = nextDayFirstPair(d);
+    if (next !== null) {
+      text += `\n\n<blockquote>${nextPairHint(d, next[0], next[1], true)}</blockquote>`;
     }
     return text;
   }

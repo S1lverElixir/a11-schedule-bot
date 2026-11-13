@@ -19,7 +19,7 @@ pub const BTN_PICK: &str = "Выбрать день";
 pub const GREETING: &str = "<b>Расписание группы А-11</b>\nДни, неделя, звонки и календарь — кнопками ниже.\n<i>Утром в 07:30 приходит сводка дня.</i>";
 /// /help: карта возможностей — единственное место, где перечисление уместно;
 /// названия кнопок в «ёлочках», как они выглядят в клавиатуре.
-pub const HELP_TEXT: &str = "<b>Что умеет бот</b>\n«Сегодня» и «Завтра» — расписание дня; у «Сегодня» ещё и прогресс-бар.\n«Сейчас» — что идёт и что дальше.\n«Неделя» — раскладка недели; стрелки листают, «Экспорт в календарь» даёт .ics.\n«Выбрать день» — календарь на месяц.\n«Звонки» — время звонков и перемен.\n<i>Утром в 07:30 приходит сводка дня.</i>";
+pub const HELP_TEXT: &str = "<b>Что умеет бот</b>\n«Сегодня» — расписание дня с прогресс-баром, «Завтра» — расписание дня.\n«Сейчас» — что идёт и что дальше.\n«Неделя» — раскладка недели; стрелки листают, «В календарь» даёт .ics.\n«Выбрать день» — календарь на месяц.\n«Звонки» — время звонков и перемен.\n<i>Утром в 07:30 приходит сводка дня.</i>";
 /// Ответ на незнакомый текст владельца: короткая подсказка вместо молчания.
 pub const UNKNOWN_TEXT: &str = "Не понял, кнопки ниже.";
 pub const PICK_PROMPT: &str = "<b>Выбери день</b>";
@@ -213,7 +213,7 @@ pub fn day_text(d: Date, suffix: &str, now: Now) -> String {
         }
         if let Some((nd, first)) = next_day_first_pair(d) {
             text.push_str("\n\n<blockquote>");
-            text.push_str(&next_pair_hint(d, nd, &first));
+            text.push_str(&next_pair_hint(d, nd, &first, true));
             text.push_str("</blockquote>");
         }
         return text;
@@ -281,12 +281,14 @@ fn next_day_first_pair(after: Date) -> Option<(Date, Pair)> {
 }
 
 /// Текст-подсказка «завтра: …» / «ближайшая пара: …» без обёртки blockquote.
-fn next_pair_hint(d: Date, nd: Date, first: &Pair) -> String {
+/// nearest всегда называет день явно — в дне с пометкой «· завтра» второе
+/// «завтра» читается как тот же день и путает.
+fn next_pair_hint(d: Date, nd: Date, first: &Pair, nearest: bool) -> String {
     let rooms = match first.rooms {
         Some(r) if !r.is_empty() => format!(", ауд. {}", fmt_rooms(Some(r))),
         _ => String::new(),
     };
-    if nd.days_since(d) == 1 {
+    if !nearest && nd.days_since(d) == 1 {
         format!(
             "завтра: {}-я пара в {} — {}{rooms}",
             first.num,
@@ -312,7 +314,7 @@ pub fn now_text(now: Now) -> String {
         "<b>Сейчас {} · {}, {}</b>\nНеделя {} чертой",
         now.hh_mm(),
         WD_FULL[d.weekday() as usize],
-        d.fmt_dm(),
+        d.fmt_dmy(),
         week_label(d)
     );
     let pairs = day_pairs(d);
@@ -320,7 +322,7 @@ pub fn now_text(now: Now) -> String {
         let mut text = format!("{head}\n\n<i>сегодня пар нет</i>");
         if let Some((nd, first)) = next_day_first_pair(d) {
             text.push_str("\n\n<blockquote>");
-            text.push_str(&next_pair_hint(d, nd, &first));
+            text.push_str(&next_pair_hint(d, nd, &first, false));
             text.push_str("</blockquote>");
         }
         return text;
@@ -358,10 +360,12 @@ pub fn now_text(now: Now) -> String {
     if let Some(i) = upcoming {
         let p = pairs[i];
         let gap = hm(p.start) - now.minute;
+        // та же формулировка, что и статусная строка дня: «10 мин» — это остаток,
+        // а не длительность перемены
         let label = if i == 0 {
-            "до первой пары"
+            "до первой пары".to_string()
         } else {
-            "перемена"
+            format!("перемена, до {}-й пары", p.num)
         };
         return format!(
             "{head}\n\n<i>{label} {}</i>\n\n{}",
@@ -372,7 +376,7 @@ pub fn now_text(now: Now) -> String {
     let mut text = format!("{head}\n\n<i>занятия окончены</i>");
     if let Some((nd, first)) = next_day_first_pair(d) {
         text.push_str("\n\n<blockquote>");
-        text.push_str(&next_pair_hint(d, nd, &first));
+        text.push_str(&next_pair_hint(d, nd, &first, false));
         text.push_str("</blockquote>");
     }
     text
@@ -416,9 +420,12 @@ pub fn render_week(monday: Date, now: Now) -> String {
         if idx.len() == 1 {
             lines.push(format!("<b>{wd} {}{mark}</b>", days[idx[0]].fmt_dm()));
         } else {
+            // у каждого выходного своё имя рядом с датой — «Сб 14.11 · Вс 15.11»
             lines.push(format!(
-                "<b>{wd} {} · {}{mark}</b>",
+                "<b>{} {} · {} {}{mark}</b>",
+                WD_SHORT[idx[0]],
                 days[idx[0]].fmt_dm(),
+                WD_SHORT[idx[1]],
                 days[idx[1]].fmt_dm()
             ));
         }
@@ -504,12 +511,13 @@ pub fn main_kb() -> Value {
     })
 }
 
-/// Кнопки под неделей: ‹ | Экспорт в календарь | ›.
+/// Кнопки под неделей: ‹ | В календарь | ›. Подпись короткая — длинная
+/// обрезалась клиентом посреди ряда.
 pub fn week_kb(monday: Date) -> InlineKb {
     InlineKb {
         rows: vec![InlineKb::row(vec![
             btn("‹", format!("wk:{}", monday.add_days(-7).fmt_iso())),
-            btn("Экспорт в календарь", format!("ics:{}", monday.fmt_iso())),
+            btn("В календарь", format!("ics:{}", monday.fmt_iso())),
             btn("›", format!("wk:{}", monday.add_days(7).fmt_iso())),
         ])],
     }
@@ -594,6 +602,12 @@ pub fn morning_text(d: Date, now: Now) -> String {
         for cl in cancel_lines(&cancelled_nums(d)) {
             text.push('\n');
             text.push_str(&cl);
+        }
+        // единообразие с пустым днём: подсказка и здесь
+        if let Some((nd, first)) = next_day_first_pair(d) {
+            text.push_str("\n\n<blockquote>");
+            text.push_str(&next_pair_hint(d, nd, &first, true));
+            text.push_str("</blockquote>");
         }
         return text;
     }
@@ -684,7 +698,7 @@ mod tests {
         };
         let sunday = day_text(Date::parse_iso("2026-10-25").expect("дата"), "", now);
         assert!(sunday.contains("<i>пар нет</i>"));
-        assert!(sunday.contains("<blockquote>завтра:"));
+        assert!(sunday.contains("<blockquote>ближайшая пара: понедельник, 26.10,"));
         let vacation = day_text(Date::parse_iso("2027-01-05").expect("дата"), "", now);
         assert!(vacation.contains("<i>пар нет</i>"));
         assert!(!vacation.contains("<blockquote>"));
