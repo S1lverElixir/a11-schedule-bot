@@ -13,4 +13,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Воркер деплоится вручную, fps.ms больше не рестартует
-        run: echo "деплой воркера вручную: npx wrangler deploy (из workers/); панель fps.ms не трогается"
+        run: |
+          echo "деплой воркера вручную: npx wrangler deploy (из workers/); панель fps.ms не трогается"
