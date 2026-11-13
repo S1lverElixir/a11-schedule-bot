@@ -55,6 +55,7 @@ git push origin main                    # only when the owner asked in this task
 - The shell is PowerShell: no `grep`, no `tail`, no `*.py` glob expansion for commands. Search with the read/glob/grep tools, or `Select-String`/`Get-Content` in the shell.
 - The gate prints `ЛОКАЛЬНО` and `ПРОД` sections of `[OK]/[WARN]/[FAIL]` and exits 1 on any FAIL.
 - The test path is the pure render functions and a recording stub of the API, never a live send into the owner's chat.
+- Library and framework docs (Rust crates, axum, teloxide, anything else this repo starts using) come from the context7 connector: `resolve-library-id`, then `query-docs`. It is configured once at user level in Qoder; this repo, Lumen and tg-bots-portfolio are the coding projects where it is meant to be used.
 
 ## Code layout (`rust/`)
 - `render.rs`/`ics.rs` are pure and never touch the network, `telegram.rs` is the transport, `bot.rs` holds handlers and both background tasks, `date.rs` is the hand-rolled calendar, `log.rs` stars out the token in every line.
