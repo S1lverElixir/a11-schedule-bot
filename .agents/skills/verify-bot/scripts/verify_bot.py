@@ -330,14 +330,32 @@ def check_workers_prod(env):
         return
     try:
         # workers.dev за Cloudflare: urllib получает 403, curl с браузерным UA проходит;
-        # локальный DNS иногда отдаёт только IPv6 с мёртвым путём — поэтому -4 и ретраи
-        r = subprocess.run(
-            ["curl", "-4", "-s", "--max-time", "25", "--retry", "4", "--retry-all-errors",
-             "--retry-delay", "2", "-w", "\n%{http_code}", WORKER_URL,
-             "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                   "AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36"],
-            capture_output=True, text=True, timeout=180)
-        body, _, code = r.stdout.rpartition("\n")
+        # локальный DNS качается волнами — то IPv6-only, то SERVFAIL — поэтому
+        # лестница: прямой -4 с ретраями → A-записи через два DoH-резолвера →
+        # известные anycast-IP эджа. SNI один и тот же, любой эдж отдаёт воркер.
+        ua = ["-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                     "AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36"]
+        host = WORKER_URL[len("https://"):]
+        base = ["curl", "-4", "-s", "--max-time", "25", "-w", "\n%{http_code}", WORKER_URL] + ua
+        attempts = [base + ["--retry", "4", "--retry-all-errors", "--retry-delay", "2"]]
+        for resolver in ("https://cloudflare-dns.com/dns-query", "https://1.1.1.1/dns-query"):
+            doh = subprocess.run(
+                ["curl", "-4", "-s", "--max-time", "15", f"{resolver}?name={host}&type=A",
+                 "-H", "accept: application/dns-json"],
+                capture_output=True, text=True, timeout=25)
+            attempts.extend(
+                base + ["--resolve", f"{host}:443:{ip}"]
+                for ip in re.findall(r'"data":\s*"(\d+\.\d+\.\d+\.\d+)"', doh.stdout)[:2])
+        attempts.extend(
+            base + ["--resolve", f"{host}:443:{ip}"]
+            for ip in ("188.114.97.11", "104.21.0.1"))
+        code = "000"
+        body = ""
+        for args in attempts:
+            r = subprocess.run(args, capture_output=True, text=True, timeout=60)
+            body, _, code = r.stdout.rpartition("\n")
+            if code == "200" and "a11-bot worker" in body:
+                break
         if code == "200" and "a11-bot worker" in body:
             ok(f"воркер отвечает 200: {WORKER_URL}")
         else:
