@@ -12,7 +12,7 @@ use crate::date::{local_now_seconds, parse_iso_datetime, Date, Now, Stamp};
 use crate::ics::ics_for_week;
 use crate::log;
 use crate::render;
-use crate::schedule::{SEMESTER_END, SEMESTER_START};
+use crate::schedule::{day_pairs, SEMESTER_END, SEMESTER_START};
 use crate::telegram::{send_message_params, Api, Telegram};
 
 const BUTTONS: [&str; 6] = [
@@ -289,6 +289,7 @@ pub fn spawn_morning(tg: Arc<Telegram>, owner_id: i64, time: String) {
                 let (date, secs) = local_now_seconds();
                 if SEMESTER_START <= date
                     && date <= SEMESTER_END
+                    && !day_pairs(date).is_empty()
                     && (target..target + 90 * 60).contains(&secs)
                     && last_sent != Some(date)
                 {

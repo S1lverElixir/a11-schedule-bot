@@ -13,7 +13,7 @@ import { Bot } from "./bot.ts";
 import { nowLocal, type Now } from "./date.ts";
 import * as log from "./log.ts";
 import { mainKb, morningText } from "./render.ts";
-import { SEMESTER_END, SEMESTER_START } from "./schedule.ts";
+import { dayPairs, SEMESTER_END, SEMESTER_START } from "./schedule.ts";
 import { Telegram } from "./telegram.ts";
 
 export interface Env {
@@ -98,7 +98,7 @@ export async function cronSummary(
   now: Now,
   ownerId: number,
   tg: SummaryTg,
-): Promise<"sent" | "seen" | "outside" | "window" | "error"> {
+): Promise<"sent" | "seen" | "outside" | "empty" | "window" | "error"> {
   if (
     !(
       SEMESTER_START.days() <= now.date.days() &&
@@ -106,6 +106,10 @@ export async function cronSummary(
     )
   ) {
     return "outside"; // вне семестра сводки нет, как у Rust-бота
+  }
+  if (dayPairs(now.date).length === 0) {
+    // в день без пар раскладки нет — сводка была бы спамом «пар нет»
+    return "empty";
   }
   const target = morningTargetMinutes();
   const secs = now.minute * 60;

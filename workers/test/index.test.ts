@@ -289,6 +289,15 @@ test("сводка: вне семестра — ничего ни в чат, н�
   assert.equal(kv.puts.length, 0);
 });
 
+test("сводка: день без пар не отправляется вовсе", async () => {
+  const kv = new FakeKv();
+  const tg = new RecordingTg();
+  // суббота 14.11.2026 — над-неделя, пар нет
+  assert.equal(await cronSummary(kvEnv(kv), nowAt("2026-11-14", 450), 42, tg), "empty");
+  assert.equal(tg.calls.length, 0);
+  assert.equal(kv.puts.length, 0);
+});
+
 test("сводка: окно — до 07:28 и после 09:00 не отправляется", async () => {
   const kv = new FakeKv();
   const tg = new RecordingTg();
