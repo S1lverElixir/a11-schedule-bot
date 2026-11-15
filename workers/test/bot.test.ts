@@ -1,7 +1,7 @@
 //! Тесты обработчиков на сбоях сети и враждебном вводе: ошибки Telegram не роняют
 //! обработку, чужие чаты и кривые callback-данные отсекаются молча.
 
-import { test } from "node:test";
+import { test, mock } from "node:test";
 import assert from "node:assert/strict";
 import { Bot } from "../src/bot.ts";
 import { Date, type Now } from "../src/date.ts";
@@ -156,4 +156,91 @@ test("editMessageReplyMarkup: сбой не роняет обработку", as
   await bot.handleUpdate(cb, NOW);
   assert.equal(api.calls.length, 2);
   assert.equal(api.calls[1]!.method, "editMessageReplyMarkup");
+});
+
+test("wk: стрелка листает сообщение на месте", async () => {
+  const api = new FailApi();
+  const bot = new Bot(api, OWNER);
+  const cb = {
+    callback_query: {
+      id: "cb1",
+      from: { id: OWNER },
+      data: "wk:2026-10-19",
+      message: { chat: { id: OWNER }, message_id: 500 },
+    },
+  };
+  await bot.handleUpdate(cb, NOW);
+  assert.equal(api.calls.length, 2);
+  assert.equal(api.calls[1]!.method, "editMessageText");
+  const params = api.calls[1]!.params as Record<string, unknown>;
+  assert.equal(params.message_id, 500, "правится привязанное сообщение");
+  assert.equal(params.parse_mode, "HTML");
+  assert.ok(String(params.text).startsWith("<b>Неделя 19.10–25.10"), "текст новой недели");
+  assert.ok(params.reply_markup, "клавиатура уходит с правкой");
+});
+
+test("wk: отвязанное сообщение (очень старое) — уходит новое", async () => {
+  const api = new FailApi();
+  const bot = new Bot(api, OWNER);
+  await bot.handleUpdate(callback("wk:2026-10-19"), NOW);
+  assert.equal(api.calls[1]!.method, "sendMessage", "message нет в callback — фолбэк на отправку");
+});
+
+test("wk: «message is not modified» при повторном тапе — не сбой", async () => {
+  // отдельная заглушка: FailApi бросает общий текст, здесь нужен именно текст Telegram
+  class NotModifiedApi extends FailApi {
+    async call(method: string, params: unknown): Promise<unknown> {
+      this.calls.push({ method, params });
+      if (method === this.failOn) throw new Error("Bad Request: message is not modified");
+      return null;
+    }
+  }
+  const silent = new NotModifiedApi();
+  silent.failOn = "editMessageText";
+  const cb = {
+    callback_query: {
+      id: "cb1",
+      from: { id: OWNER },
+      data: "wk:2026-10-19",
+      message: { chat: { id: OWNER }, message_id: 500 },
+    },
+  };
+  const lines: string[] = [];
+  const spy = mock.method(console, "log", (msg: string) => lines.push(msg));
+  try {
+    await new Bot(silent, OWNER).handleUpdate(cb, NOW);
+  } finally {
+    spy.mock.restore();
+  }
+  assert.equal(silent.calls.length, 2, "обработка не упала и не прервалась");
+  assert.ok(
+    !lines.some((l) => l.includes("ERROR editMessageText:")),
+    "холостая правка не шумит ошибкой в лог",
+  );
+});
+
+test("wk: настоящий сбой правки логируется, обработка живёт", async () => {
+  const api = new FailApi();
+  api.failOn = "editMessageText";
+  const bot = new Bot(api, OWNER);
+  const cb = {
+    callback_query: {
+      id: "cb1",
+      from: { id: OWNER },
+      data: "wk:2026-10-19",
+      message: { chat: { id: OWNER }, message_id: 500 },
+    },
+  };
+  const lines: string[] = [];
+  const spy = mock.method(console, "log", (msg: string) => lines.push(msg));
+  try {
+    await bot.handleUpdate(cb, NOW);
+  } finally {
+    spy.mock.restore();
+  }
+  assert.equal(api.calls.length, 2, "исключение поймано, не улетело выше");
+  assert.ok(
+    lines.some((l) => l.includes("ERROR editMessageText:")),
+    "настоящий сбой правки виден в логе",
+  );
 });

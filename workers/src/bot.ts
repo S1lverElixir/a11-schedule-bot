@@ -229,12 +229,33 @@ export class Bot {
       case "wk": {
         const monday = Date.parseIso(parts[1] ?? "");
         if (monday === null) return badData(data);
-        await this.send(
-          chatId,
-          renderWeek(monday, now),
-          weekKb(monday).toValue(),
-          "HTML",
-        );
+        const messageId = msg?.message_id;
+        if (typeof messageId !== "number") {
+          // Telegram отвязал кнопку от сообщения (очень старое) — уходит новое
+          await this.send(
+            chatId,
+            renderWeek(monday, now),
+            weekKb(monday).toValue(),
+            "HTML",
+          );
+          break;
+        }
+        try {
+          // листание на месте: то же сообщение, новый текст недели
+          await this.api.call("editMessageText", {
+            chat_id: chatId,
+            message_id: messageId,
+            text: renderWeek(monday, now),
+            reply_markup: weekKb(monday).toValue(),
+            parse_mode: "HTML",
+          });
+        } catch (e) {
+          // повторный тап той же стрелки — «message is not modified», это не сбой
+          const desc = log.errText(e);
+          if (!desc.includes("message is not modified")) {
+            log.error(`editMessageText: ${desc}`);
+          }
+        }
         break;
       }
       case "ics": {
