@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { caseNames, valueFor } from "../src/snapshot.ts";
+import { caseNames, kindOf, snapshotDocument, valueFor } from "../src/snapshot.ts";
 import { deepEqual } from "./helpers.ts";
 
 const FIXTURE_PATH = resolve(
@@ -67,5 +67,16 @@ test("имена снимков уникальны", () => {
   for (const c of doc.cases) {
     assert.ok(!seen.has(c.name), `дубль снимка: ${c.name}`);
     seen.add(c.name);
+  }
+});
+
+test("перечисление и kind закрывают весь эталон", () => {
+  const doc = JSON.parse(readFileSync(FIXTURE_PATH, "utf8")) as {
+    cases: { name: string; kind: string }[];
+  };
+  const fresh = snapshotDocument() as { cases: object[] };
+  assert.equal(fresh.cases.length, doc.cases.length);
+  for (const c of doc.cases) {
+    assert.equal(kindOf(c.name), c.kind, `kind снимка ${c.name}`);
   }
 });

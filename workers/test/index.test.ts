@@ -5,7 +5,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { handleWebhook, cronSummary, parseOwnerId, secretOk, type Env } from "../src/index.ts";
+import worker, { handleWebhook, cronSummary, parseOwnerId, secretOk, type Env } from "../src/index.ts";
 import { Date, type Now } from "../src/date.ts";
 import { Recorder } from "./helpers.ts";
 import { Bot } from "../src/bot.ts";
@@ -334,4 +334,32 @@ test("сводка: сбой отправки не ставит отметку �
   assert.equal(result, "error");
   assert.equal(kv.puts.length, 0);
   assert.equal(tg.calls, 1);
+});
+
+test("обёртка fetch: сбой обработки всё равно отвечает 200 «ok» — без ретраев Telegram", async () => {
+  // тело-поток падает посреди чтения: исключение ловит обёртка, не обработчик
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.error(new Error("канал умер"));
+    },
+  });
+  // duplex — требование undici для тела-потока; в типах Workers этого поля нет
+  const init = {
+    method: "POST",
+    body: stream,
+    duplex: "half",
+    headers: { "X-Telegram-Bot-Api-Secret-Token": SECRET },
+  } as unknown as RequestInit;
+  const broken = new Request("https://worker.example/webhook", init);
+  const resp = await worker.fetch(broken, envOf());
+  assert.equal(resp.status, 200);
+  assert.equal(await resp.text(), "ok");
+});
+
+test("обёртка scheduled: кривой MY_TELEGRAM_ID — тихий выход, сети не было", async () => {
+  await worker.scheduled(
+    {} as ScheduledController,
+    envOf({ MY_TELEGRAM_ID: "abc" }),
+    {} as ExecutionContext,
+  );
 });

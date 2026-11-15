@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { Date } from "../src/date.ts";
 import {
   ANCHOR_MONDAY,
+  dumpSchedule,
   BELLS,
   SEMESTER_END,
   SEMESTER_START,
@@ -133,4 +134,29 @@ test("звонки: пары 1–5 группы А-11 и два ночных с�
   assert.equal(BELLS[0].start, "09:00");
   assert.equal(BELLS[6].end, "21:50");
   assert.equal(BELLS[6].br, null);
+});
+
+test("dumpSchedule: форма данных для сверки с сайтом", () => {
+  const doc = dumpSchedule() as Record<string, unknown>;
+  assert.deepEqual(Object.keys(doc).sort(), [
+    "anchor_monday", "bells", "days", "kind", "semester", "substitutions",
+  ]);
+  assert.deepEqual(doc["semester"], ["2026-09-01", "2026-12-31"]);
+  assert.equal(doc["anchor_monday"], "2026-09-21");
+  const days = doc["days"] as Record<string, unknown>[][];
+  assert.equal(days.length, 7);
+  assert.deepEqual(Object.keys(days[0][0]).sort(), [
+    "end", "num", "rooms", "start", "subj", "teachers", "weeks",
+  ]);
+  const subs = doc["substitutions"] as Record<string, unknown>[];
+  assert.equal(subs.length, 1);
+  assert.equal(subs[0]!["date"], "2026-12-16");
+  assert.deepEqual(Object.keys(subs[0]!).sort(), [
+    "date", "end", "num", "rooms", "start", "subj", "teachers",
+  ]);
+  const bells = doc["bells"] as Record<string, unknown>[];
+  assert.equal(bells.length, 7);
+  assert.deepEqual(Object.keys(bells[0]).sort(), [
+    "break", "end", "first", "num", "second", "start",
+  ]);
 });

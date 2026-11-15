@@ -2,7 +2,15 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cancelLines, dayText, esc, fmtMinutes, fmtRooms, pairsWord } from "../src/render.ts";
+import {
+  cancelLines,
+  dayText,
+  esc,
+  fmtMinutes,
+  fmtRooms,
+  pairsWord,
+  roundHalfEven,
+} from "../src/render.ts";
 import { cancelledNums } from "../src/schedule.ts";
 import { Date, type Now } from "../src/date.ts";
 
@@ -10,9 +18,23 @@ test("отменённых слотов в данных пока нет — canc
   assert.deepEqual(cancelledNums(Date.parseIso("2026-12-16")!), []);
 });
 
-test("округление половины к чётному совпадает с Python", () => {
-  // сама функция приватна; проверяем через поведенческие случаи ниже и паритет
-  assert.ok(true);
+test("округление половины к чётному — как round() в Python", () => {
+  assert.equal(roundHalfEven(1, 2), 0);
+  assert.equal(roundHalfEven(3, 2), 2);
+  assert.equal(roundHalfEven(4, 2), 2);
+  assert.equal(roundHalfEven(5, 2), 2);
+  assert.equal(roundHalfEven(7, 2), 4);
+  assert.equal(roundHalfEven(9, 2), 4);
+  assert.equal(roundHalfEven(10, 2), 5);
+  assert.equal(roundHalfEven(7, 3), 2);
+  assert.equal(roundHalfEven(8, 3), 3);
+});
+
+test("fmtRooms: экранирование и пробел после запятых", () => {
+  assert.equal(fmtRooms("3-36,3-24"), "3-36, 3-24");
+  assert.equal(fmtRooms("a&b<c>d\"e'f"), "a&amp;b&lt;c&gt;d&quot;e&#x27;f");
+  assert.equal(fmtRooms(null), "");
+  assert.equal(fmtRooms(""), "");
 });
 
 test("экранирование совпадает с html.escape в Python", () => {

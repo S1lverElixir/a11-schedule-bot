@@ -136,8 +136,8 @@ function daySpan(pairs: readonly Pair[]): [number, number] {
   return [hm(pairs[0]!.start), hm(pairs[pairs.length - 1]!.end)];
 }
 
-/// Округление половины к чётному, как `round()` в Python.
-function roundHalfEven(num: number, den: number): number {
+/// Округление половины к чётному, как `round()` в Python; экспортировано для теста.
+export function roundHalfEven(num: number, den: number): number {
   const q = Math.floor(num / den);
   const r = (num - Math.floor(num / den) * den) * 2;
   if (r > den || (r === den && q % 2 !== 0)) {

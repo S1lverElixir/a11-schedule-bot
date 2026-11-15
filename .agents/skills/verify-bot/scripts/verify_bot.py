@@ -23,7 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
 WORKERS = ROOT / "workers"
-WORKERS_TESTS = ["date", "schedule", "render", "ics", "parity", "handlers", "index"]
+WORKERS_TESTS = ["date", "schedule", "render", "ics", "parity", "handlers", "index", "telegram", "log", "bot"]
 FIXTURES = WORKERS / "test" / "fixtures"
 EMOJI = re.compile("[\U0001F000-\U0001FAFF☀-➿⬀-⯿️‼]")
 

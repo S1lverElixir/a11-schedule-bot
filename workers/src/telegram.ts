@@ -28,7 +28,7 @@ export function sendMessageParams(
   if (replyMarkup !== undefined && replyMarkup !== null) {
     params.reply_markup = replyMarkup;
   }
-  if (parseMode !== undefined) {
+  if (parseMode !== undefined && parseMode !== null) {
     params.parse_mode = parseMode;
   }
   return params;

@@ -2,7 +2,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Date, Stamp } from "../src/date.ts";
+import { Date, Stamp, wdLower } from "../src/date.ts";
 
 test("форматирование дат: известные значения", () => {
   const d = Date.parseIso("2026-10-23");
@@ -67,4 +67,9 @@ test("штампы: формат .ics и перевод местное врем�
   const d = Date.parseIso("2026-10-23")!;
   const s = Stamp.fromLocal(d, 8 * 3600 + 34 * 60 + 56);
   assert.equal(s.fmtIcs(), "20261023T053456Z", "UTC+3 отнят от местного времени");
+});
+
+test("дни недели строчными — все семь", () => {
+  const days = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"];
+  days.forEach((name, wd) => assert.equal(wdLower(wd), name));
 });
