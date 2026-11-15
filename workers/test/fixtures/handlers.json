@@ -4096,6 +4096,33 @@
       "chat_id": 1,
       "filename": "raspisanie_26.10-01.11.ics",
       "caption": "<b>Неделя 26.10–01.11 · над чертой</b>",
+      "reply_markup": {
+       "keyboard": [
+        [
+         {
+          "text": "Сегодня"
+         },
+         {
+          "text": "Завтра"
+         },
+         {
+          "text": "Сейчас"
+         },
+         {
+          "text": "Неделя"
+         }
+        ],
+        [
+         {
+          "text": "Звонки"
+         },
+         {
+          "text": "Выбрать день"
+         }
+        ]
+       ],
+       "resize_keyboard": true
+      },
       "content": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//a11-schedule-bot//RU\r\nCALSCALE:GREGORIAN\r\nBEGIN:VEVENT\r\nUID:20261026-1@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261026T090000\r\nDTEND:20261026T103500\r\nSUMMARY:Физическая культура\r\nLOCATION:\r\nDESCRIPTION:ст.пр. Маркевич О.П.\\, пр. Руденко Т.Н\r\n .\\, ст.пр. Степанцов В.М.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261026-2@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261026T105000\r\nDTEND:20261026T122500\r\nSUMMARY:Математический анализ\r\nLOCATION:1-13\r\nDESCRIPTION:доц. Кузьменкова И.А.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261026-3@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261026T125500\r\nDTEND:20261026T143000\r\nSUMMARY:История и теория кооперативного дви\r\n жения\r\nLOCATION:1-9\r\nDESCRIPTION:доц. Котов И.С.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261026-4@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261026T144000\r\nDTEND:20261026T161500\r\nSUMMARY:Информационный час\r\nLOCATION:3-27\r\nDESCRIPTION:ст.пр. Игнатьев А.М.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261027-2@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261027T105000\r\nDTEND:20261027T122500\r\nSUMMARY:Экономическая теория\r\nLOCATION:1-13\r\nDESCRIPTION:ст.пр. Барабанова И.В.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261027-3@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261027T125500\r\nDTEND:20261027T143000\r\nSUMMARY:Математический анализ\r\nLOCATION:1-13\r\nDESCRIPTION:доц. Кузьменкова И.А.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261027-4@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261027T144000\r\nDTEND:20261027T161500\r\nSUMMARY:Основы алгоритмизации и программиро\r\n вания\r\nLOCATION:1-14\r\nDESCRIPTION:пр. Сыч Д.С.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261027-5@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261027T162500\r\nDTEND:20261027T180000\r\nSUMMARY:Основы алгоритмизации и программиро\r\n вания\r\nLOCATION:3-27\\,3-30\r\nDESCRIPTION:пр. Сыч Д.С.\\, пр. Шкрабков Я.Н.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261028-1@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261028T090000\r\nDTEND:20261028T103500\r\nSUMMARY:Физическая культура\r\nLOCATION:\r\nDESCRIPTION:ст.пр. Маркевич О.П.\\, пр. Руденко Т.Н\r\n .\\, ст.пр. Степанцов В.М.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261028-2@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261028T105000\r\nDTEND:20261028T122500\r\nSUMMARY:Иностранный язык\r\nLOCATION:2-3\r\nDESCRIPTION:ст.пр. Селицкая Е.Ю.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261028-3@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261028T125500\r\nDTEND:20261028T143000\r\nSUMMARY:Иностранный язык\r\nLOCATION:2-3\r\nDESCRIPTION:ст.пр. Селицкая Е.Ю.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261029-1@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261029T090000\r\nDTEND:20261029T103500\r\nSUMMARY:Операционные системы\r\nLOCATION:3-36\\,3-24\r\nDESCRIPTION:ст.пр. Воруева В.И.\\, ст.пр. Сон С.Б.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261029-2@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261029T105000\r\nDTEND:20261029T122500\r\nSUMMARY:Линейная алгебра и аналитическая ге\r\n ометрия\r\nLOCATION:1-25\r\nDESCRIPTION:доц. Кузьменкова И.А.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261029-3@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261029T125500\r\nDTEND:20261029T143000\r\nSUMMARY:Компьютерные информационные технол\r\n огии\r\nLOCATION:2-22\\,3-16\r\nDESCRIPTION:ст.пр. Конша И.Г.\\, пр.-ст. Днепровски\r\n й А.Р.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261029-4@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261029T144000\r\nDTEND:20261029T161500\r\nSUMMARY:История и теория кооперативного дви\r\n жения\r\nLOCATION:1-10\r\nDESCRIPTION:доц. Котов И.С.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261030-1@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261030T090000\r\nDTEND:20261030T103500\r\nSUMMARY:Экономическая теория\r\nLOCATION:2-11\r\nDESCRIPTION:ст.пр. Барабанова И.В.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261030-2@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261030T105000\r\nDTEND:20261030T122500\r\nSUMMARY:Современная политэкономия\r\nLOCATION:1-22\r\nDESCRIPTION:ст.пр. Чернявский М.Р.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261030-3@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261030T125500\r\nDTEND:20261030T143000\r\nSUMMARY:Линейная алгебра и аналитическая ге\r\n ометрия\r\nLOCATION:1-21\r\nDESCRIPTION:доц. Кузьменкова И.А.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261030-4@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261030T144000\r\nDTEND:20261030T161500\r\nSUMMARY:Современная политэкономия\r\nLOCATION:1-21\r\nDESCRIPTION:ст.пр. Чернявский М.Р.\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
      }
     }
@@ -4136,6 +4163,33 @@
       "chat_id": 1,
       "filename": "raspisanie_02.11-08.11.ics",
       "caption": "<b>Неделя 02.11–08.11 · под чертой</b>",
+      "reply_markup": {
+       "keyboard": [
+        [
+         {
+          "text": "Сегодня"
+         },
+         {
+          "text": "Завтра"
+         },
+         {
+          "text": "Сейчас"
+         },
+         {
+          "text": "Неделя"
+         }
+        ],
+        [
+         {
+          "text": "Звонки"
+         },
+         {
+          "text": "Выбрать день"
+         }
+        ]
+       ],
+       "resize_keyboard": true
+      },
       "content": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//a11-schedule-bot//RU\r\nCALSCALE:GREGORIAN\r\nBEGIN:VEVENT\r\nUID:20261102-1@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261102T090000\r\nDTEND:20261102T103500\r\nSUMMARY:Физическая культура\r\nLOCATION:\r\nDESCRIPTION:ст.пр. Маркевич О.П.\\, пр. Руденко Т.Н\r\n .\\, ст.пр. Степанцов В.М.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261102-2@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261102T105000\r\nDTEND:20261102T122500\r\nSUMMARY:Математический анализ\r\nLOCATION:1-13\r\nDESCRIPTION:доц. Кузьменкова И.А.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261102-3@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261102T125500\r\nDTEND:20261102T143000\r\nSUMMARY:Компьютерные информационные технол\r\n огии\r\nLOCATION:1-2\r\nDESCRIPTION:доц. Лебедева Е.В.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261103-2@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261103T105000\r\nDTEND:20261103T122500\r\nSUMMARY:Экономическая теория\r\nLOCATION:1-13\r\nDESCRIPTION:ст.пр. Барабанова И.В.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261103-3@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261103T125500\r\nDTEND:20261103T143000\r\nSUMMARY:Математический анализ\r\nLOCATION:1-13\r\nDESCRIPTION:доц. Кузьменкова И.А.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261103-4@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261103T144000\r\nDTEND:20261103T161500\r\nSUMMARY:Основы алгоритмизации и программиро\r\n вания\r\nLOCATION:1-14\r\nDESCRIPTION:пр. Сыч Д.С.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261103-5@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261103T162500\r\nDTEND:20261103T180000\r\nSUMMARY:Основы алгоритмизации и программиро\r\n вания\r\nLOCATION:3-27\\,3-30\r\nDESCRIPTION:пр. Сыч Д.С.\\, пр. Шкрабков Я.Н.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261104-1@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261104T090000\r\nDTEND:20261104T103500\r\nSUMMARY:Физическая культура\r\nLOCATION:\r\nDESCRIPTION:ст.пр. Маркевич О.П.\\, пр. Руденко Т.Н\r\n .\\, ст.пр. Степанцов В.М.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261104-2@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261104T105000\r\nDTEND:20261104T122500\r\nSUMMARY:Иностранный язык\r\nLOCATION:2-3\r\nDESCRIPTION:ст.пр. Селицкая Е.Ю.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261104-3@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261104T125500\r\nDTEND:20261104T143000\r\nSUMMARY:Иностранный язык\r\nLOCATION:2-3\r\nDESCRIPTION:ст.пр. Селицкая Е.Ю.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261105-2@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261105T105000\r\nDTEND:20261105T122500\r\nSUMMARY:Великая Отечественная война советск\r\n ого народа (в контексте Второй мировой в\r\n ойны)\r\nLOCATION:1-2\r\nDESCRIPTION:доц. Котов И.С.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261105-3@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261105T125500\r\nDTEND:20261105T143000\r\nSUMMARY:История и теория кооперативного дви\r\n жения\r\nLOCATION:1-2\r\nDESCRIPTION:доц. Котов И.С.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261105-4@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261105T144000\r\nDTEND:20261105T161500\r\nSUMMARY:Компьютерные информационные технол\r\n огии\r\nLOCATION:2-22\\,3-16\r\nDESCRIPTION:ст.пр. Конша И.Г.\\, пр.-ст. Днепровски\r\n й А.Р.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261105-5@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261105T162500\r\nDTEND:20261105T180000\r\nSUMMARY:Информационный час\r\nLOCATION:1-21\r\nDESCRIPTION:ст.пр. Игнатьев А.М.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261106-1@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261106T090000\r\nDTEND:20261106T103500\r\nSUMMARY:Экономическая теория\r\nLOCATION:2-11\r\nDESCRIPTION:ст.пр. Барабанова И.В.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261106-2@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261106T105000\r\nDTEND:20261106T122500\r\nSUMMARY:Современная политэкономия\r\nLOCATION:1-22\r\nDESCRIPTION:ст.пр. Чернявский М.Р.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261106-3@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261106T125500\r\nDTEND:20261106T143000\r\nSUMMARY:Операционные системы\r\nLOCATION:3-36\\,3-24\r\nDESCRIPTION:ст.пр. Воруева В.И.\\, ст.пр. Сон С.Б.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261107-1@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261107T090000\r\nDTEND:20261107T103500\r\nSUMMARY:Линейная алгебра и аналитическая ге\r\n ометрия\r\nLOCATION:1-9\r\nDESCRIPTION:доц. Кузьменкова И.А.\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:20261107-2@a11-bot\r\nDTSTAMP:20261023T095600Z\r\nDTSTART:20261107T105000\r\nDTEND:20261107T122500\r\nSUMMARY:Линейная алгебра и аналитическая ге\r\n ометрия\r\nLOCATION:1-9\r\nDESCRIPTION:доц. Кузьменкова И.А.\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
      }
     }

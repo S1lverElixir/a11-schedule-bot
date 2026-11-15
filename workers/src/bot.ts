@@ -252,7 +252,8 @@ export class Bot {
         const stamp = Stamp.fromLocal(now.date, now.minute * 60);
         const file = icsForWeek(monday, stamp);
         try {
-          await this.api.sendDocument(chatId, name, encoder.encode(file), caption);
+          // документ тоже несёт reply-клавиатуру: без неё Desktop её спрячет
+          await this.api.sendDocument(chatId, name, encoder.encode(file), caption, mainKb());
         } catch (e) {
           log.error(`sendDocument: ${log.errText(e)}`);
         }

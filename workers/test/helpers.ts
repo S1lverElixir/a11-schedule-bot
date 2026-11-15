@@ -16,11 +16,18 @@ export class Recorder implements Api {
     filename: string,
     content: Uint8Array,
     caption: string,
+    replyMarkup?: unknown,
   ): Promise<unknown> {
-    this.calls.push({
-      method: "sendDocument",
-      params: { chat_id: chatId, filename, caption, content: new TextDecoder().decode(content) },
-    });
+    const params: Record<string, unknown> = {
+      chat_id: chatId,
+      filename,
+      caption,
+      content: new TextDecoder().decode(content),
+    };
+    if (replyMarkup !== undefined && replyMarkup !== null) {
+      params.reply_markup = replyMarkup;
+    }
+    this.calls.push({ method: "sendDocument", params });
     return null;
   }
 }

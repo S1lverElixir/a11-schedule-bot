@@ -26,6 +26,7 @@ async function call(method, params) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params ?? {}),
+    signal: AbortSignal.timeout(30_000),
   });
   const body = await resp.json().catch(() => null);
   return body?.ok === true
@@ -49,7 +50,11 @@ try {
   const form = new FormData();
   form.append("photo", JSON.stringify({ type: "static", photo: "attach://avatar" }));
   form.append("avatar", new Blob([photo], { type: "image/jpeg" }), "avatar.jpg");
-  const resp = await fetch(`${base}/setMyProfilePhoto`, { method: "POST", body: form });
+  const resp = await fetch(`${base}/setMyProfilePhoto`, {
+    method: "POST",
+    body: form,
+    signal: AbortSignal.timeout(30_000),
+  });
   const body = await resp.json().catch(() => null);
   if (body?.ok === true) {
     console.log("[OK] setMyProfilePhoto");

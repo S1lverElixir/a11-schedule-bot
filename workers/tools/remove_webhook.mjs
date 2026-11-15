@@ -15,6 +15,7 @@ const resp = await fetch(`https://api.telegram.org/bot${token}/deleteWebhook`, {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ drop_pending_updates: false }),
+  signal: AbortSignal.timeout(30_000),
 });
 const body = await resp.json().catch(() => null);
 if (body?.ok === true) {

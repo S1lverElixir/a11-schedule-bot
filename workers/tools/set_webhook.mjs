@@ -73,12 +73,15 @@ const resp = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
     secret_token: secret,
     allowed_updates: ["message", "callback_query"],
   }),
+  signal: AbortSignal.timeout(30_000),
 });
 const body = await resp.json().catch(() => null);
 if (body?.ok === true) {
   console.log("вебхук установлен:", url);
   // подтвердить, какому именно боту встал вебхук: токен не печатается
-  const me = await fetch(`https://api.telegram.org/bot${token}/getMe`)
+  const me = await fetch(`https://api.telegram.org/bot${token}/getMe`, {
+    signal: AbortSignal.timeout(30_000),
+  })
     .then((r) => r.json())
     .catch(() => null);
   console.log("бот:", me?.ok ? `@${me.result.username}` : "getMe не ответил");

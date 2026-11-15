@@ -13,6 +13,7 @@ export interface Api {
     filename: string,
     content: Uint8Array,
     caption: string,
+    replyMarkup?: unknown,
   ): Promise<unknown>;
 }
 
@@ -49,6 +50,8 @@ export class Telegram implements Api {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(params ?? {}),
+        // висящий вызов держал бы вебхук открытым до платформенного лимита
+        signal: AbortSignal.timeout(30_000),
       });
     } catch (e) {
       throw new Error(`${method}: сеть: ${errText(e)}`);
@@ -78,11 +81,15 @@ export class Telegram implements Api {
     filename: string,
     content: Uint8Array,
     caption: string,
+    replyMarkup?: unknown,
   ): Promise<unknown> {
     const form = new FormData();
     form.append("chat_id", String(chatId));
     form.append("caption", caption);
     form.append("parse_mode", "HTML");
+    if (replyMarkup !== undefined && replyMarkup !== null) {
+      form.append("reply_markup", JSON.stringify(replyMarkup));
+    }
     form.append(
       "document",
       new Blob([content as ArrayBufferView], { type: "text/calendar" }),
@@ -90,7 +97,11 @@ export class Telegram implements Api {
     );
     let resp: Response;
     try {
-      resp = await fetch(`${this.base}/sendDocument`, { method: "POST", body: form });
+      resp = await fetch(`${this.base}/sendDocument`, {
+        method: "POST",
+        body: form,
+        signal: AbortSignal.timeout(30_000),
+      });
     } catch (e) {
       throw new Error(`sendDocument: сеть: ${errText(e)}`);
     }
