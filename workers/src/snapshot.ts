@@ -232,7 +232,7 @@ function dateOf(s: string): Date {
 }
 
 /// Значение снимка по его имени — тот же разбор имени, что и в паритет-тесте.
-/// null означает «случай не вычисляется», как None в Rust.
+/// null означает «случай не вычисляется»: в документ эталона он не попадает.
 export function valueFor(name: string): unknown {
   const parts = name.split("|");
   switch (parts[0]) {

@@ -1,4 +1,4 @@
-//! Тесты .ics: зеркала юнит-тестов rust/src/ics.rs.
+//! Тесты .ics: черта недели якоря, CRLF, события на каждую пару.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";

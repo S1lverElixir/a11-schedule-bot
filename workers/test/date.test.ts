@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Date, Stamp } from "../src/date.ts";
 
-test("форматирование дат совпадает с Rust", () => {
+test("форматирование дат: известные значения", () => {
   const d = Date.parseIso("2026-10-23");
   assert.ok(d);
   assert.equal(d.fmtIso(), "2026-10-23");

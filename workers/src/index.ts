@@ -21,8 +21,8 @@ export interface Env {
   MY_TELEGRAM_ID: string;
   /// Секрет, который Telegram передаёт в заголовке каждого вызова вебхука.
   WEBHOOK_SECRET?: string;
-  /// KV-пространство: отметка «сводка за сегодня уже ушла» (то, что у Rust-бота
-  /// жило в памяти и терялось при рестарте).
+  /// KV-пространство: отметка «сводка за сегодня уже ушла» — переживает
+  /// перезапуск изолята, в отличие от памяти процесса.
   DEDUP: KVNamespace;
 }
 
@@ -101,7 +101,7 @@ export async function cronSummary(
       now.date.days() <= SEMESTER_END.days()
     )
   ) {
-    return "outside"; // вне семестра сводки нет, как у Rust-бота
+    return "outside"; // вне семестра сводки нет вовсе
   }
   if (dayPairs(now.date).length === 0) {
     // в день без пар раскладки нет — сводка была бы спамом «пар нет»
@@ -109,8 +109,8 @@ export async function cronSummary(
   }
   const target = morningTargetMinutes();
   const secs = now.minute * 60;
-  // окно полтора часа — наследие Rust-бота, расширено на две минуты назад:
-  // крон может сработать чуть раньше графика, Rust-цикл ловил бы это на следующей минуте
+  // окно — полтора часа с двумя минутами на опережение: крон может сработать
+  // чуть раньше графика
   if (secs < (target - 2) * 60 || secs >= (target + 90) * 60) {
     log.warn(`крон пришёл вне окна сводки: ${now.minute} мин`);
     return "window";

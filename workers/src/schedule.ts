@@ -43,7 +43,7 @@ export function weekMark(day: Date): Weeks {
   return weeks % 2 === 0 ? "Under" : "Over";
 }
 
-/// Метка недели строкой, как её писал Python-бот.
+/// Метка недели строкой: «над», «под» или «both».
 export function weekLabel(day: Date): string {
   return weeksLabel(weekMark(day));
 }
@@ -540,8 +540,7 @@ export const BELLS: readonly Bell[] = [
 ];
 
 /// Машинный дамп данных для сверки с сайтом: его печатает workers/tools/dump_schedule.ts,
-/// читает tools/check_site.py. Ключи и форма значений — как у прежнего
-/// --dump-schedule Rust-бота: неделя строкой («над»/«под»/«both»), замены датой ISO,
+/// читает tools/check_site.py. Неделя строкой («над»/«под»/«both»), замены датой ISO,
 /// отсутствующая аудитория — пустая строка вместо null.
 export function dumpSchedule(): object {
   const days = SCHEDULE.map((rows) =>

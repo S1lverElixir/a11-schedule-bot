@@ -1,4 +1,4 @@
-//! Тонкий клиент Bot API — дословный порт rust/src/telegram.rs под fetch Workers.
+//! Тонкий клиент Bot API поверх fetch.
 //!
 //! Через шов Api тесты подменяют сеть записывающей заглушкой и сверяют поведение
 //! с эталоном handlers.json.
@@ -17,7 +17,7 @@ export interface Api {
   ): Promise<unknown>;
 }
 
-/// Параметры sendMessage: без пустых полей, как их собирал Python-бот.
+/// Параметры sendMessage: пустые поля не отправляются вовсе.
 export function sendMessageParams(
   chatId: number,
   text: string,

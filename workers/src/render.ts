@@ -1,7 +1,7 @@
 //! Все текстовые виды бота — чистые функции: строят строку, сети не касаются.
 //!
-//! Дословный порт rust/src/render.rs. Форматы — контракт SPEC.md, поэтому даже
-//! отступы и тире здесь менять нельзя: parity-тест сравнивает байт-в-байт.
+//! Форматы — контракт SPEC.md, а фикстура views.json сверяется байт-в-байт:
+//! даже отступы и тире менять нельзя без пересъёмки эталона.
 
 import {
   MONTHS,
@@ -324,7 +324,6 @@ export function renderWeek(monday: Date, now: Now): string {
   const today = now.date;
   const days: Date[] = [];
   for (let i = 0; i < 7; i++) days.push(monday.addDays(i));
-  // один расчёт на день: раньше пары считались дважды — для счётчика и для строк
   const lists: Pair[][] = days.map((d) => dayPairs(d));
   const counts: number[] = lists.map((v) => v.length);
   const firstLine = `<b>Неделя ${monday.fmtDm()}–${days[6]!.fmtDm()} · ${weekLabel(monday)} чертой</b>`;

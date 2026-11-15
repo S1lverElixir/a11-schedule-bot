@@ -1,4 +1,4 @@
-//! Даты и время без сторонних библиотек — дословный порт rust/src/date.rs.
+//! Даты и время без сторонних библиотек.
 //!
 //! Календарь — арифметика гражданских дат (дни от 1970-01-01), часы — фиксированный
 //! UTC+3: летнего времени в Минске нет, а привязка к tz-базе платформы не нужна.
@@ -6,22 +6,22 @@
 /// Глобальный конструктор даты: в этом модуле имя Date занято нашим классом.
 const GlobalDate = globalThis.Date;
 
-/// Целочисленное деление с усечением к нулю, как `/` над целыми в Rust.
+/// Целочисленное деление с усечением к нулю — не то же, что floor на отрицательных.
 function truncDiv(a: number, b: number): number {
   return Math.trunc(a / b);
 }
 
-/// Деление с округлением вниз, как `div_euclid` в Rust.
+/// Деление с округлением вниз: на отрицательных — к минус бесконечности.
 function divEuclid(a: number, b: number): number {
   return Math.floor(a / b);
 }
 
-/// Остаток в смысле `rem_euclid` в Rust: всегда в [0, b).
+/// Остаток, всегда в [0, b) — в том числе для отрицательного делимого.
 function remEuclid(a: number, b: number): number {
   return a - Math.floor(a / b) * b;
 }
 
-/// Разбор целого как `parse::<i32>` в Rust: необязательный знак, только цифры.
+/// Разбор целого: необязательный знак, только цифры, границы i32.
 function parseI32(s: string): number | null {
   if (!/^[+-]?\d+$/.test(s)) return null;
   const v = Number(s);
@@ -29,7 +29,7 @@ function parseI32(s: string): number | null {
   return v;
 }
 
-/// Разбор целого как `parse::<u32>` в Rust: без знака, только цифры.
+/// Разбор целого: без знака, только цифры, границы u32.
 function parseU32(s: string): number | null {
   if (!/^\d+$/.test(s)) return null;
   const v = Number(s);
@@ -52,7 +52,8 @@ function daysFromCivil(y: number, m: number, d: number): number {
   return era * 146097 + doe - 719468;
 }
 
-/// Обратный переход: гражданская дата по числу дней от 1970-01-01.
+/// Обратный переход, тоже алгоритм Хиннанта: сдвиг эры перед делением
+/// ставит границу века на кратную точку — «очевидное» деление ломает даты до 1970.
 function civilFromDays(z: number): [number, number, number] {
   const zz = z + 719468;
   const era = truncDiv(zz >= 0 ? zz : zz - 146096, 146097);

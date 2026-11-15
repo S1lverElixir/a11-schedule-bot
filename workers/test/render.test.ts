@@ -1,4 +1,4 @@
-//! Тесты рендера: зеркала юнит-тестов rust/src/render.rs.
+//! Тесты рендера: экранирование, форматы чисел и слов, отмены, подсказки.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
