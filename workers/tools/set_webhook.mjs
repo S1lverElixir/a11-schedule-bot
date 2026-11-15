@@ -10,7 +10,7 @@
 //! две строки: токен, затем секрет:
 //!   node workers/tools/set_webhook.mjs <адрес-воркера> --stdin
 //!
-//! Секрет — тот же, что в секретe WEBHOOK_SECRET воркера (npx wrangler secret put).
+//! Секрет — тот же, что в секрете WEBHOOK_SECRET воркера (npx wrangler secret put).
 
 import { readEnv } from "./env.mjs";
 import { createInterface } from "node:readline";

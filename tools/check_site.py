@@ -29,6 +29,10 @@ import urllib.request
 
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0"}
 
+# Учебный год: год начала семестра. При смене семестра правится вместе с
+# границами в workers/src/schedule.ts — по чек-листу «Semester change» в AGENTS.md.
+YEAR = 2026
+
 PAGE_STABLE = 11427   # Стабильное расписание ФЭУ
 PAGE_NACHITKA = 8929  # Начитка (дневная форма)
 PAGE_WEEKS = 30575    # Формирование учебных недель
@@ -47,7 +51,7 @@ MONTHS = {
     "июля": 7, "августа": 8, "сентября": 9, "октября": 10, "ноября": 11, "декабря": 12,
 }
 DAY_NAMES = {
-    "ПОНЕДЕЛЬНИК": 0, "ПОНЕДЕЛЬ": 0, "ВТОРНИК": 1, "ВТОРНИК": 1, "СРЕДА": 2,
+    "ПОНЕДЕЛЬНИК": 0, "ПОНЕДЕЛЬ": 0, "ВТОРНИК": 1, "СРЕДА": 2,
     "ЧЕТВЕРГ": 3, "ПЯТНИЦА": 4, "СУББОТА": 5, "ВОСКРЕСЕНЬЕ": 6,
 }
 GROUP_COLUMN = "А -11"
@@ -215,12 +219,12 @@ def dated_rows(rows, col):
 
 
 def range_of(label):
-    """«А-1 с 01.09-13.09» -> (date, date) в 2026 году, если диапазон понятен."""
+    """«А-1 с 01.09-13.09» -> (date, date) учебного года, если диапазон понятен."""
     m = re.search(r"(\d{2})\.(\d{2})\s*[-–]\s*(\d{2})\.(\d{2})", label)
     if not m:
         return None
     d1, m1, d2, m2 = (int(v) for v in m.groups())
-    year = 2026
+    year = YEAR
     try:
         return dt.date(year, m1, d1), dt.date(year, m2, d2)
     except ValueError:
@@ -251,12 +255,12 @@ def weeks_table():
         seg = section.group(1)
         for r in re.finditer(r"(\d{1,2})\s+(" + "|".join(MONTHS) + r")\s*[–-]\s*\d{1,2}\s+\w+", seg):
             try:
-                out[dt.date(2026, MONTHS[r.group(2)], int(r.group(1)))] = mark
+                out[dt.date(YEAR, MONTHS[r.group(2)], int(r.group(1)))] = mark
             except ValueError:
                 continue
         for r in re.finditer(r"(\d{2})\.(\d{2})\s*[–-]\s*(\d{2})\.(\d{2})", seg):
             try:
-                out[dt.date(2026, int(r.group(2)), int(r.group(1)))] = mark
+                out[dt.date(YEAR, int(r.group(2)), int(r.group(1)))] = mark
             except ValueError:
                 continue
     return out
@@ -310,7 +314,7 @@ def main():
     anchor = dt.date.fromisoformat(ours["anchor_monday"])
     wrong = 0
     for monday, mark in sorted(weeks.items()):
-        if monday < dt.date(2026, 9, 14) or monday > dt.date(2026, 12, 28):
+        if monday < dt.date(YEAR, 9, 14) or monday > dt.date(YEAR, 12, 28):
             continue
         weeks_between = (monday - anchor).days // 7
         ours_mark = "под" if weeks_between % 2 == 0 else "над"
