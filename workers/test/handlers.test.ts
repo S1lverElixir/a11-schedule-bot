@@ -11,35 +11,12 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Bot } from "../src/bot.ts";
 import { Date, type Now } from "../src/date.ts";
-import type { Api } from "../src/telegram.ts";
+import { deepEqual, Recorder } from "./helpers.ts";
 
 const FIXTURE_PATH = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "./fixtures/handlers.json",
 );
-
-class Recorder implements Api {
-  calls: { method: string; params: unknown }[] = [];
-
-  async call(method: string, params: unknown): Promise<unknown> {
-    this.calls.push({ method, params });
-    return null;
-  }
-
-  async sendDocument(
-    chatId: number,
-    filename: string,
-    content: Uint8Array,
-    caption: string,
-  ): Promise<unknown> {
-    const text = new TextDecoder().decode(content);
-    this.calls.push({
-      method: "sendDocument",
-      params: { chat_id: chatId, filename, caption, content: text },
-    });
-    return null;
-  }
-}
 
 /// «2026-10-23T12:56:00+03:00» → условные часы бота.
 function nowOf(s: string): Now {
@@ -86,23 +63,3 @@ test("обработчики делают те же вызовы, что и эт
     `расхождений: ${failedCount} из ${cases.length}\n${failures.join("\n")}`,
   );
 });
-
-/// Структурное равенство: массивы поэлементно, объекты — по набору ключей.
-function deepEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  if (typeof a !== typeof b) return false;
-  if (a === null || b === null) return false;
-  if (Array.isArray(a) && Array.isArray(b)) {
-    if (a.length !== b.length) return false;
-    return a.every((x, i) => deepEqual(x, b[i]));
-  }
-  if (a instanceof Object && b instanceof Object) {
-    const ka = Object.keys(a).sort();
-    const kb = Object.keys(b).sort();
-    if (!deepEqual(ka, kb)) return false;
-    const oa = a as Record<string, unknown>;
-    const ob = b as Record<string, unknown>;
-    return ka.every((k) => deepEqual(oa[k], ob[k]));
-  }
-  return false;
-}

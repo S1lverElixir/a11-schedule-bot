@@ -50,7 +50,7 @@ export function weekLabel(day: Date): string {
 
 /// Строка стабильного расписания: номер, начало, конец, предмет, аудитории,
 /// преподаватели, недели.
-export interface Row {
+interface Row {
   num: number;
   start: string;
   end: string;
@@ -471,7 +471,7 @@ const KIND: readonly (readonly [string, string])[] = [
 ];
 
 /// Расписание звонков: номер, начало, конец, 1-й час, 2-й час, перерыв после пары.
-export interface Bell {
+interface Bell {
   num: number;
   start: string;
   end: string;

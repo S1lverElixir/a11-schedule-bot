@@ -7,7 +7,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { handleWebhook, cronSummary, parseOwnerId, secretOk, type Env } from "../src/index.ts";
 import { Date, type Now } from "../src/date.ts";
-import type { Api } from "../src/telegram.ts";
+import { Recorder } from "./helpers.ts";
 import { Bot } from "../src/bot.ts";
 
 /// Секрет вебхука в реальности — ASCII (ограничение заголовков Telegram), здесь тоже.
@@ -22,28 +22,6 @@ function envOf(over: Partial<Env> = {}): Env {
     DEDUP: null as unknown as KVNamespace,
     ...over,
   };
-}
-
-class Recorder implements Api {
-  calls: { method: string; params: unknown }[] = [];
-
-  async call(method: string, params: unknown): Promise<unknown> {
-    this.calls.push({ method, params });
-    return null;
-  }
-
-  async sendDocument(
-    chatId: number,
-    filename: string,
-    content: Uint8Array,
-    caption: string,
-  ): Promise<unknown> {
-    this.calls.push({
-      method: "sendDocument",
-      params: { chat_id: chatId, filename, caption, content: new TextDecoder().decode(content) },
-    });
-    return null;
-  }
 }
 
 function post(body: string, secret: string | undefined): Request {

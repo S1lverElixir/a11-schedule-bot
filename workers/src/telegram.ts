@@ -3,6 +3,8 @@
 //! Через шов Api тесты подменяют сеть записывающей заглушкой и сверяют поведение
 //! с эталоном handlers.json.
 
+import { errText } from "./log.ts";
+
 /// Что бот умеет у Telegram: ровно то, что нужно обработчикам.
 export interface Api {
   call(method: string, params: unknown): Promise<unknown>;
@@ -29,10 +31,6 @@ export function sendMessageParams(
     params.parse_mode = parseMode;
   }
   return params;
-}
-
-function errText(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
 }
 
 export class Telegram implements Api {

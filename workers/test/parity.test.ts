@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { caseNames, valueFor } from "../src/snapshot.ts";
+import { deepEqual } from "./helpers.ts";
 
 const FIXTURE_PATH = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -68,23 +69,3 @@ test("имена снимков уникальны", () => {
     seen.add(c.name);
   }
 });
-
-/// Структурное равенство значений снимков: строки — байт в байт.
-function deepEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  if (typeof a !== typeof b) return false;
-  if (a === null || b === null) return false;
-  if (Array.isArray(a) && Array.isArray(b)) {
-    if (a.length !== b.length) return false;
-    return a.every((x, i) => deepEqual(x, b[i]));
-  }
-  if (a instanceof Object && b instanceof Object) {
-    const ka = Object.keys(a).sort();
-    const kb = Object.keys(b).sort();
-    if (!deepEqual(ka, kb)) return false;
-    const oa = a as Record<string, unknown>;
-    const ob = b as Record<string, unknown>;
-    return ka.every((k) => deepEqual(oa[k], ob[k]));
-  }
-  return false;
-}

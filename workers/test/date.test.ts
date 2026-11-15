@@ -1,8 +1,8 @@
-//! Тесты календаря: зеркала юнит-проверок rust/src и известные значения форматов.
+//! Тесты календаря: арифметика дат, форматы, строгость разбора.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Date, Stamp, parseIsoDatetime } from "../src/date.ts";
+import { Date, Stamp } from "../src/date.ts";
 
 test("форматирование дат совпадает с Rust", () => {
   const d = Date.parseIso("2026-10-23");
@@ -67,22 +67,4 @@ test("штампы: формат .ics и перевод местное врем�
   const d = Date.parseIso("2026-10-23")!;
   const s = Stamp.fromLocal(d, 8 * 3600 + 34 * 60 + 56);
   assert.equal(s.fmtIcs(), "20261023T053456Z", "UTC+3 отнят от местного времени");
-});
-
-test("разбор ISO-даты со смещением", () => {
-  // «2026-11-04T12:00:00+00:00» — ровно полдень UTC
-  const s = parseIsoDatetime("2026-11-04T12:00:00+00:00");
-  assert.ok(s);
-  const days = Date.parseIso("2026-11-04")!.days();
-  assert.equal(s.unix(), days * 86400 + 12 * 3600);
-  // +03:00 отнимается: местные 12:00 — это 09:00 UTC
-  const s3 = parseIsoDatetime("2026-11-04T12:00:00+03:00");
-  assert.ok(s3);
-  assert.equal(s3.unix(), days * 86400 + 9 * 3600);
-  const z = parseIsoDatetime("2026-11-04T12:00:00Z");
-  assert.ok(z);
-  assert.equal(z.unix(), days * 86400 + 12 * 3600);
-  assert.equal(parseIsoDatetime("кривая строка"), null);
-  assert.equal(parseIsoDatetime("2026-11-04"), null);
-  assert.equal(parseIsoDatetime("2026-11-04T25:00:00+00:00"), null);
 });

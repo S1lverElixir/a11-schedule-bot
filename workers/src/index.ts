@@ -32,10 +32,6 @@ const MORNING_LOCAL = "07:30";
 /// Отсечь тело больше 1 МБ до разбора JSON: Workers кладёт тело в память целиком.
 const MAX_BODY_BYTES = 1024 * 1024;
 
-function errText(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
-
 /// Идентификатор владельца — непустая строка цифр без знака и нуля; кривая — отказ.
 export function parseOwnerId(raw: string | undefined): number | null {
   const s = (raw ?? "").trim();
@@ -127,7 +123,7 @@ export async function cronSummary(
   try {
     await tg.sendMessage(ownerId, morningText(now.date, now), mainKb(), "HTML");
   } catch (e) {
-    log.error(`morning summary failed: ${errText(e)}`);
+    log.error(`morning summary failed: ${log.errText(e)}`);
     return "error"; // отметки нет: сводка уйдёт со следующим запуском в окне
   }
   await env.DEDUP.put(key, "1", { expirationTtl: 172800 });
@@ -136,7 +132,7 @@ export async function cronSummary(
 }
 
 /// Минимальный облик бота для шва тестов: ровно то, что вызывает вебхук.
-export interface WebhookBot {
+interface WebhookBot {
   handleUpdate(update: unknown, now: Now): Promise<void>;
 }
 
@@ -214,7 +210,7 @@ export default {
     } catch (e) {
       // непойманное исключение вернуло бы 500: Telegram начал бы ретраить
       // и дублировать обработку; сбой уже записан в лог
-      log.error(`webhook: ${errText(e)}`);
+      log.error(`webhook: ${log.errText(e)}`);
       return new Response("ok", { status: 200 });
     }
   },
@@ -233,7 +229,7 @@ export default {
       }
       await cronSummary(env, nowLocal(), ownerId, new Telegram(env.BOT_TOKEN));
     } catch (e) {
-      log.error(`cron: ${errText(e)}`);
+      log.error(`cron: ${log.errText(e)}`);
     }
   },
 };

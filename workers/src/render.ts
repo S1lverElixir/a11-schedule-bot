@@ -70,7 +70,7 @@ export function esc(s: string): string {
 }
 
 /// «09:50» → минуты от полуночи.
-export function hm(s: string): number {
+function hm(s: string): number {
   const [h, m] = s.split(":");
   return Number(h) * 60 + Number(m);
 }
@@ -93,32 +93,19 @@ export function pairsWord(n: number): string {
 /// Аудитории для вывода: экранирование и пробел после запятой в перечнях.
 export function fmtRooms(rooms: string | null): string {
   if (rooms === null || rooms === "") return "";
-  let out = "";
-  for (const c of rooms) {
-    switch (c) {
-      case "&":
-        out += "&amp;";
-        break;
-      case "<":
-        out += "&lt;";
-        break;
-      case ">":
-        out += "&gt;";
-        break;
-      case '"':
-        out += "&quot;";
-        break;
-      case "'":
-        out += "&#x27;";
-        break;
-      case ",":
-        out += ", ";
-        break;
-      default:
-        out += c;
-    }
-  }
-  return out;
+  return rooms.split(",").map(esc).join(", ");
+}
+
+/// Хвост «, ауд. …» для подсказок и строк пар; без аудитории — пусто.
+function roomsTail(rooms: string | null): string {
+  return rooms !== null && rooms !== "" ? `, ауд. ${fmtRooms(rooms)}` : "";
+}
+
+/// Строка пары для компактных видов («Неделя», утренняя сводка):
+/// «N (HH:MM) Предмет[, ауд. …][ · замена]».
+function pairLine(p: Pair): string {
+  const tail = p.sub ? " · замена" : "";
+  return `${p.num} (${p.start}) ${subjectTitle(p.subj)}${roomsTail(p.rooms)}${tail}`;
 }
 
 /// Заголовок предмета с типом занятия через « · ».
@@ -279,10 +266,7 @@ function nextDayFirstPair(after: Date): [Date, Pair] | null {
 /// nearest всегда называет день явно — в дне с пометкой «· завтра» второе
 /// «завтра» читается как тот же день и путает.
 function nextPairHint(d: Date, nd: Date, first: Pair, nearest = false): string {
-  const rooms =
-    first.rooms !== null && first.rooms !== ""
-      ? `, ауд. ${fmtRooms(first.rooms)}`
-      : "";
+  const rooms = roomsTail(first.rooms);
   if (!nearest && nd.daysSince(d) === 1) {
     return `завтра: ${first.num}-я пара в ${first.start} — ${esc(first.subj)}${rooms}`;
   }
@@ -314,11 +298,7 @@ export function nowText(now: Now): string {
     let text = `${head}\n\n${pairBlock(p, null)}\n<i>до конца ${fmtMinutes(hm(p.end) - now.minute)}</i>`;
     if (running + 1 < pairs.length) {
       const nxt = pairs[running + 1]!;
-      const rooms =
-        nxt.rooms !== null && nxt.rooms !== ""
-          ? `, ауд. ${fmtRooms(nxt.rooms)}`
-          : "";
-      text += `\n\n<blockquote>дальше: ${nxt.num}-я пара в ${nxt.start} — ${esc(nxt.subj)}${rooms}</blockquote>`;
+      text += `\n\n<blockquote>дальше: ${nxt.num}-я пара в ${nxt.start} — ${esc(nxt.subj)}${roomsTail(nxt.rooms)}</blockquote>`;
     }
     return text;
   }
@@ -381,13 +361,7 @@ export function renderWeek(monday: Date, now: Now): string {
       continue;
     }
     for (const p of pairs) {
-      const title = subjectTitle(p.subj);
-      const tail = p.sub ? " · замена" : "";
-      if (p.rooms !== null && p.rooms !== "") {
-        lines.push(`${p.num} (${p.start}) ${title}, ауд. ${fmtRooms(p.rooms)}${tail}`);
-      } else {
-        lines.push(`${p.num} (${p.start}) ${title}${tail}`);
-      }
+      lines.push(pairLine(p));
     }
     lines.push(`<i>${pairs.length} ${pairsWord(pairs.length)}</i>`);
   }
@@ -410,12 +384,12 @@ function monthIntersects(y: number, m: number): boolean {
 }
 
 /// Inline-клавиатура: строки клеток «текст → callback_data».
-export interface KbCell {
+interface KbCell {
   text: string;
   callback_data: string;
 }
 
-export interface InlineKbValue {
+interface InlineKbValue {
   inline_keyboard: KbCell[][];
 }
 
@@ -440,7 +414,7 @@ function btn(text: string, data: string): [string, string] {
   return [text, data];
 }
 
-export interface ReplyKbValue {
+interface ReplyKbValue {
   keyboard: { text: string }[][];
   resize_keyboard: boolean;
 }
@@ -558,13 +532,7 @@ export function morningText(d: Date, now: Now): string {
   }
   const lines: string[] = [];
   for (const p of pairs) {
-    const title = subjectTitle(p.subj);
-    const tail = p.sub ? " · замена" : "";
-    if (p.rooms !== null && p.rooms !== "") {
-      lines.push(`${p.num} (${p.start}) ${title}, ауд. ${fmtRooms(p.rooms)}${tail}`);
-    } else {
-      lines.push(`${p.num} (${p.start}) ${title}${tail}`);
-    }
+    lines.push(pairLine(p));
   }
   let text = `${head}\n${info}\n\n${lines.join("\n")}\n<i>${pairs.length} ${pairsWord(pairs.length)}</i>`;
   for (const cl of cancelLines(cancelledNums(d))) {

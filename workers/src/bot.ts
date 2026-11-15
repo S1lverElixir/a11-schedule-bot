@@ -46,10 +46,6 @@ const BUTTONS: readonly string[] = [
 
 const encoder = new TextEncoder();
 
-function errText(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
-
 function badData(data: string): void {
   log.warn(`bad callback data: ${JSON.stringify(data)}`);
 }
@@ -89,7 +85,7 @@ export class Bot {
     try {
       await this.api.call("sendMessage", params);
     } catch (e) {
-      log.error(`sendMessage: ${errText(e)}`);
+      log.error(`sendMessage: ${log.errText(e)}`);
     }
   }
 
@@ -184,7 +180,7 @@ export class Bot {
     try {
       await this.api.call("answerCallbackQuery", { callback_query_id: cbId });
     } catch (e) {
-      log.error(`answerCallbackQuery: ${errText(e)}`);
+      log.error(`answerCallbackQuery: ${log.errText(e)}`);
     }
     const data = cb.data;
     if (typeof data !== "string") {
@@ -230,7 +226,7 @@ export class Bot {
               reply_markup: markup,
             });
           } catch (e) {
-            log.error(`editMessageReplyMarkup: ${errText(e)}`);
+            log.error(`editMessageReplyMarkup: ${log.errText(e)}`);
           }
         }
         break;
@@ -258,7 +254,7 @@ export class Bot {
         try {
           await this.api.sendDocument(chatId, name, encoder.encode(file), caption);
         } catch (e) {
-          log.error(`sendDocument: ${errText(e)}`);
+          log.error(`sendDocument: ${log.errText(e)}`);
         }
         break;
       }

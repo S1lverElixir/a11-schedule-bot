@@ -73,7 +73,7 @@ function leap(y: number): boolean {
   return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
 }
 
-export function daysInMonth(y: number, m: number): number {
+function daysInMonth(y: number, m: number): number {
   switch (m) {
     case 1:
     case 3:
@@ -108,7 +108,7 @@ export class Date {
     return new Date(daysFromCivil(y, m, d));
   }
 
-  /// Дата по числу дней от 1970-01-01 — внутренний шов для Now и Stamp.
+  /// Дата по числу дней от 1970-01-01 — шов для nowLocal/localStamp в этом модуле.
   static fromDays(n: number): Date {
     return new Date(n);
   }
@@ -260,7 +260,7 @@ export interface Now {
   minute: number;
 }
 
-export const TZ_OFFSET_SECS = 3 * 3600;
+const TZ_OFFSET_SECS = 3 * 3600;
 
 function wallSeconds(): number {
   return Math.floor(GlobalDate.now() / 1000);
@@ -280,7 +280,7 @@ export function hhMm(now: Now): string {
 }
 
 /// Текущий момент по UTC+3 с точностью до секунды: дата и секунды от полуночи.
-export function localNowSeconds(): [Date, number] {
+function localNowSeconds(): [Date, number] {
   const secs = wallSeconds() + TZ_OFFSET_SECS;
   return [Date.fromDays(divEuclid(secs, 86400)), remEuclid(secs, 86400)];
 }
@@ -302,21 +302,14 @@ export class Stamp {
     this.n = n;
   }
 
+  /// Конструктор для тестов: детерминированный штамп вместо часов.
   static fromUnix(secs: number): Stamp {
     return new Stamp(secs);
-  }
-
-  static now(): Stamp {
-    return new Stamp(wallSeconds());
   }
 
   /// Местный момент (UTC+3) как штамп UTC: так .ics получает DTSTAMP.
   static fromLocal(date: Date, secondsOfDay: number): Stamp {
     return new Stamp(date.days() * 86400 + secondsOfDay - TZ_OFFSET_SECS);
-  }
-
-  unix(): number {
-    return this.n;
   }
 
   /// «20261023T083456Z»
@@ -329,53 +322,4 @@ export class Stamp {
       `${p2(Math.trunc((rem % 3600) / 60))}${p2(rem % 60)}Z`
     );
   }
-}
-
-/// Разбор ISO-строки вида «2026-11-04T12:00:00+00:00». Возвращает штамп UTC; кривой ввод — null.
-export function parseIsoDatetime(s: string): Stamp | null {
-  const t = s.trim();
-  const tIdx = t.indexOf("T");
-  const spIdx = t.indexOf(" ");
-  const sep =
-    tIdx === -1 ? spIdx : spIdx === -1 ? tIdx : Math.min(tIdx, spIdx);
-  if (sep <= 0) return null;
-  const date = Date.parseIso(t.slice(0, sep));
-  if (date === null) return null;
-  const off = splitOffset(t.slice(sep + 1));
-  if (off === null) return null;
-  const [timePart, offset] = off;
-  const segs = timePart.split(":");
-  const hh = parseU32(segs[0] ?? "");
-  const mm = parseU32(segs[1] ?? "");
-  if (hh === null || mm === null) return null;
-  const secStr = segs.length > 2 ? (segs[2] ?? "") : "0";
-  const ss = parseU32(secStr.split(".")[0] ?? "");
-  if (ss === null) return null;
-  if (hh > 23 || mm > 59 || ss > 60) return null;
-  const local = date.days() * 86400 + hh * 3600 + mm * 60 + ss;
-  return Stamp.fromUnix(local - offset);
-}
-
-function splitOffset(s: string): [string, number] | null {
-  // «Z» — это UTC, как «+00:00»
-  if (s.endsWith("Z")) return [s.slice(0, -1), 0];
-  let idx = -1;
-  for (let i = 1; i < s.length; i++) {
-    if (s[i] === "+" || s[i] === "-") {
-      idx = i;
-      break;
-    }
-  }
-  if (idx === -1) return [s, 0];
-  const time = s.slice(0, idx);
-  const off = s.slice(idx);
-  const sign = off.startsWith("-") ? -1 : 1;
-  const body = off.slice(1);
-  const ci = body.indexOf(":");
-  const hs = ci === -1 ? body : body.slice(0, ci);
-  const ms = ci === -1 ? "0" : body.slice(ci + 1);
-  const h = parseI32(hs);
-  const m = parseI32(ms);
-  if (h === null || m === null) return null;
-  return [time, sign * (h * 3600 + m * 60)];
 }

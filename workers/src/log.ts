@@ -7,6 +7,11 @@ import { localStamp } from "./date.ts";
 
 let secret = "";
 
+/// Сообщение об ошибке для лога: у Error — message, у остального — строка.
+export function errText(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
 /// Первый непустой токен выигрывает: запрос с пустым секретом (ещё не подвязан)
 /// не должен раз и навсегда оставить скраббер выключенным.
 export function setSecret(s: string): void {

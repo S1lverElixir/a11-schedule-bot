@@ -12,43 +12,13 @@
 //!
 //! Секрет — тот же, что в секретe WEBHOOK_SECRET воркера (npx wrangler secret put).
 
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readEnv } from "./env.mjs";
 import { createInterface } from "node:readline";
 
 const [url, flag] = process.argv.slice(2);
 if (!url) {
   console.error("нужен аргумент: адрес воркера");
   process.exit(1);
-}
-
-// разбор .env: BOM, комментарии, парные кавычки
-function readToken() {
-  let text;
-  try {
-    text = readFileSync(resolve(".env"), "utf8");
-  } catch {
-    console.error(".env не найден в корне репозитория");
-    process.exit(1);
-  }
-  text = text.replace(/^\uFEFF/, "");
-  for (const line of text.split(/\r?\n/)) {
-    const t = line.trim();
-    if (t === "" || t.startsWith("#")) continue;
-    const kv = t.replace(/^export\s+/, "").split("=");
-    if (kv.length < 2) continue;
-    const key = kv[0].trim();
-    let value = kv.slice(1).join("=").trim();
-    if (
-      value.length >= 2 &&
-      ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'")))
-    ) {
-      value = value.slice(1, -1);
-    }
-    if (key === "BOT_TOKEN") return value;
-  }
-  return null;
 }
 
 async function readStdinLines(count) {
@@ -83,7 +53,7 @@ if (flag === "--stdin") {
     process.exit(1);
   }
 } else {
-  token = readToken();
+  token = readEnv().BOT_TOKEN;
   if (!token) {
     console.error("в .env нет BOT_TOKEN");
     process.exit(1);

@@ -6,38 +6,12 @@
 //!
 //! Запуск из корня репозитория: node workers/tools/set_secrets.mjs
 
-import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
+import { writeFileSync, mkdtempSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-
-function readEnv() {
-  let text;
-  try {
-    text = readFileSync(resolve(".env"), "utf8");
-  } catch {
-    console.error(".env не найден в корне репозитория");
-    process.exit(1);
-  }
-  const map = {};
-  for (const line of text.replace(/^\uFEFF/, "").split(/\r?\n/)) {
-    const t = line.trim();
-    if (t === "" || t.startsWith("#")) continue;
-    const kv = t.replace(/^export\s+/, "").split("=");
-    if (kv.length < 2) continue;
-    let value = kv.slice(1).join("=").trim();
-    if (
-      value.length >= 2 &&
-      ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'")))
-    ) {
-      value = value.slice(1, -1);
-    }
-    map[kv[0].trim()] = value;
-  }
-  return map;
-}
+import { readEnv } from "./env.mjs";
 
 const env = readEnv();
 if (!env.BOT_TOKEN || !env.MY_TELEGRAM_ID) {
