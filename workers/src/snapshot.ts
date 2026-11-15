@@ -1,7 +1,8 @@
-//! Перечисление и вычисление снимков видов — дословный порт rust/src/snapshot.rs.
+//! Перечисление и вычисление снимков видов — множество случаев, по которым бот
+//! сверяется с замороженным эталоном.
 //!
 //! Имена случаев заданы тем же порядком, что и в замороженном эталоне
-//! `rust/tests/fixtures/views.json`, поэтому паритет-тест сверяет порт с эталоном
+//! `workers/test/fixtures/views.json`, поэтому паритет-тест сверяет код с эталоном
 //! по одному и тому же списку: тест и снимок не могут разойтись в том, что они сверяют.
 
 import { Date, Stamp, type Now } from "./date.ts";
@@ -30,7 +31,7 @@ import {
   weeksLabel,
 } from "./schedule.ts";
 
-/// Границы снимков: год вокруг семестра, как в исходном генераторе.
+/// Границы снимков: год вокруг семестра, как в замороженном эталоне.
 const START = Date.newConst(2026, 5, 1);
 const END = Date.newConst(2027, 4, 30);
 
@@ -323,6 +324,7 @@ export function kindOf(name: string): string {
 }
 
 /// Готовый документ эталона: те же поля и тот же порядок случаев.
+/// dump_views.ts подставляет своё имя генератора; форма полей — как в фикстуре.
 export function snapshotDocument(): object {
   const cases: object[] = [];
   for (const name of caseNames()) {
@@ -331,7 +333,7 @@ export function snapshotDocument(): object {
     cases.push({ name, kind: kindOf(name), value });
   }
   return {
-    generator: "a11-bot --dump-views (rust/src/snapshot.rs)",
+    generator: "node workers/tools/dump_views.ts",
     freeze_default: "2026-10-23T08:00:00+03:00",
     cases,
   };

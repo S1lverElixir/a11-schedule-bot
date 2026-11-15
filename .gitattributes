@@ -2,8 +2,7 @@
 *.json text eol=lf
 *.sh text eol=lf
 *.py text eol=lf
-*.rs text eol=lf
 *.toml text eol=lf
 *.md text eol=lf
-rust/bin/a11-bot binary
 
+*.ts text eol=lf

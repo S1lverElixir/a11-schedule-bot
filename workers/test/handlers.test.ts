@@ -1,7 +1,8 @@
-//! Поведение обработчиков против снимков: на каждое сообщение и нажатие порт
+//! Поведение обработчиков против снимков: на каждое сообщение и нажатие бот
 //! обязан сделать ровно те же вызовы Bot API с теми же параметрами.
 //!
-//! Зеркало rust/tests/handlers.rs: записывающая заглушка вместо сети.
+//! Снимки обработчиков генератора не имеют: замораживаются руками, правятся
+//! только вместе с осознанной сменой поведения и с полным диффом перед глазами.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -14,7 +15,7 @@ import type { Api } from "../src/telegram.ts";
 
 const FIXTURE_PATH = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  "../../rust/tests/fixtures/handlers.json",
+  "./fixtures/handlers.json",
 );
 
 class Recorder implements Api {

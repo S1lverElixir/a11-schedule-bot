@@ -3,14 +3,14 @@
 
 Запуск из корня проекта (нужен xlrd: python -m pip install xlrd):
 
-    python -X utf8 rust/tools/check_site.py            # отчёт
-    python -X utf8 rust/tools/check_site.py --emit     # ещё и блок SUBSTITUTIONS
+    python -X utf8 tools/check_site.py            # отчёт
+    python -X utf8 tools/check_site.py --emit     # ещё и блок для SUBSTITUTIONS
 
 Скрипт ничего не меняет в репозитории: он читает сайт, разбирает файлы и сверяет
-с тем, что знает бот (`a11-bot --dump-schedule`). Замены он предлагает блоком,
-который человек смотрит и переносит в rust/src/schedule.rs — предмет в файлах
-деканата набран то заглавными, то строчными, и самовставка была бы правкой текста
-бота без проверки.
+с тем, что знает бот (node workers/tools/dump_schedule.ts). Замены он предлагает
+блоком, который человек смотрит и переносит в workers/src/schedule.ts — предмет
+в файлах деканата набран то заглавными, то строчными, и самовставка была бы
+правкой текста бота без проверки.
 
 Что смотрим:
 - «Стабильное расписание» ФЭУ, файл потока А-1 (в нём колонка А-11);
@@ -21,12 +21,10 @@
 
 import datetime as dt
 import html
-import io
 import json
 import re
 import subprocess
 import sys
-import urllib.parse
 import urllib.request
 
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0"}
@@ -230,13 +228,7 @@ def range_of(label):
 
 
 def our_data():
-    import pathlib
-
-    bin_path = pathlib.Path("rust/target/release/a11-bot.exe" if sys.platform == "win32"
-                            else "rust/target/release/a11-bot")
-    if not bin_path.exists():
-        raise SystemExit("сначала собери бинарник: cargo build --release --manifest-path rust/Cargo.toml")
-    out = subprocess.run([str(bin_path), "--dump-schedule"], capture_output=True,
+    out = subprocess.run(["node", "workers/tools/dump_schedule.ts"], capture_output=True,
                          text=True, encoding="utf-8", check=True)
     return json.loads(out.stdout)
 
@@ -399,17 +391,17 @@ def main():
 
     if emit:
         bells = {b["num"]: (b["start"], b["end"]) for b in ours["bells"]}
-        print("\n// блок для rust/src/schedule.rs — проверь регистр предметов и пробелы")
+        print("\n// блок для SUBSTITUTIONS в workers/src/schedule.ts — проверь регистр предметов и пробелы")
         print("// у людей должность пишется как в данных бота: «ст.пр. Игнатьев А.М.»")
         for s in fresh:
             start, end = bells.get(s["slot"], ("", ""))
-            print('    Sub {{ day: ({y}, {m}, {d}), num: {n}, start: "{start}", '
-                  'end: "{end}", subj: "{subj}", rooms: {rooms}, '
-                  'teachers: &[{teachers}] }},  // {raw}'.format(
+            print('  {{\n    day: [{y}, {m}, {d}],\n    num: {n},\n    start: "{start}",\n'
+                  '    end: "{end}",\n    subj: "{subj}",\n    rooms: {rooms},\n'
+                  '    teachers: [{teachers}],\n  }},  // {raw}'.format(
                       y=s["date"].year, m=s["date"].month, d=s["date"].day, n=s["slot"],
                       start=start, end=end, subj=s["subj"].replace('"', "'"),
-                      rooms=f'Some("{s["rooms"]}")' if s["rooms"] else "None",
-                      teachers='"' + s["teachers"].replace('"', "'") + '"'
+                      rooms=f'"{s["rooms"]}"' if s["rooms"] else "null",
+                      teachers=f'"{s["teachers"].replace(chr(34), chr(39))}"'
                       if s["teachers"] else "",
                       raw=s["raw"]))
     print(f"\n=== ИТОГ: FAIL={len(FAILS)} ===")

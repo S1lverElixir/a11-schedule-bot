@@ -1,26 +1,30 @@
 # -*- coding: utf-8 -*-
-"""Полная проверка бота расписания А-11: Rust-сборка, паритет, статика, прод, деплой.
+"""Полная проверка бота расписания А-11: тесты и паритет фикстур, пересъёмка
+эталона, статика воркера, данные расписания, прод-живость.
 
 Запуск из корня проекта: python -X utf8 .agents/skills/verify-bot/scripts/verify_bot.py
 Флаг --local пропускает сетевые проверки. Код выхода 0 = нет [FAIL].
 
-Бот живёт в rust/; прежний Python-бот удалён вместе с колёсами и генераторами
-снимков. Локальная часть = `rust/tools/check.py` (сборка, cargo test, паритет
-против замороженных снимков, память) плюс статические правила по исходникам Rust.
-Сеть проверяется как раньше: 409, статус деплоя, панель.
+Прод — воркер a11-bot на Cloudflare Workers, деплой вручную (npx wrangler deploy
+из workers/). Локальная часть: node --test с паритетом против замороженных
+фикстур workers/test/fixtures, tsc, статические правила воркера, данные
+расписания и байт-в-байт пересъёмка эталона инструментом dump_views.ts.
+Сеть: 409-тест канала Telegram, живость воркера, вебхук, команды.
 """
 
 import json
 import re
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
-RUST_SRC = ROOT / "rust" / "src"
-FIXTURES = ROOT / "rust" / "tests" / "fixtures"
+WORKERS = ROOT / "workers"
+WORKERS_TESTS = ["date", "schedule", "render", "ics", "parity", "handlers", "index"]
+FIXTURES = WORKERS / "test" / "fixtures"
 EMOJI = re.compile("[\U0001F000-\U0001FAFF☀-➿⬀-⯿️‼]")
 
 # Официальные даты таблицы «Формирование учебных недель» на bteu.by. Под код
@@ -63,189 +67,90 @@ def load_env():
 
 
 # ---------------------------------------------------------------- локально
-def check_rust():
-    """Сборка, cargo test, паритет против снимков и память — всё из check.py."""
-    section("ЛОКАЛЬНО: Rust — сборка, тесты, паритет, память")
-    for name in ("views.json", "handlers.json"):
-        if not (FIXTURES / name).exists():
-            fail(f"нет снимка эталона: rust/tests/fixtures/{name}")
-            return
+def check_fixtures():
+    """Фикстуры на месте и в разумных пределах: паритет 7600 видов и 70 вызовов."""
+    section("ЛОКАЛЬНО: замороженные фикстуры")
+    missing = [n for n in ("views.json", "handlers.json") if not (FIXTURES / n).exists()]
+    if missing:
+        fail("нет фикстур: " + ", ".join(f"workers/test/fixtures/{n}" for n in missing))
+        return
+    views = json.loads((FIXTURES / "views.json").read_text(encoding="utf-8"))
+    cases = views.get("cases", [])
+    if len(cases) >= 7000:
+        ok(f"views.json: {len(cases)} случаев, генератор {views.get('generator', '?')!r}")
+    else:
+        fail(f"views.json подозрительно мал: {len(cases)} случаев (ждём не меньше 7000)")
+    names = [c.get("name") for c in cases]
+    dup = len(names) - len(set(names))
+    if dup:
+        fail(f"в views.json {dup} дублей имён — эталон повреждён")
+    else:
+        ok("имена видов уникальны")
+    handlers = json.loads((FIXTURES / "handlers.json").read_text(encoding="utf-8"))
+    n = len(handlers.get("cases", handlers if isinstance(handlers, list) else []))
+    if n >= 60:
+        ok(f"handlers.json: {n} вызовов обработчиков")
+    else:
+        fail(f"handlers.json подозрительно мал: {n} вызовов (ждём не меньше 60)")
+
+
+def check_dump_parity():
+    """dump_views.ts обязан воспроизводить фикстуру байт-в-байт: генератор и порт
+    не могут разойтись — любое расхождение означает, что кто-то правил одну сторону."""
+    section("ЛОКАЛЬНО: пересъёмка эталона dump-инструментом")
+    fixture = FIXTURES / "views.json"
+    if not fixture.exists():
+        fail("views.json нет — пересъёмку не с чем сверять")
+        return
     try:
-        r = subprocess.run([sys.executable, "-X", "utf8", "rust/tools/check.py"],
-                           capture_output=True, text=True, encoding="utf-8",
-                           errors="replace", cwd=ROOT, timeout=1800)
+        doc = json.loads(fixture.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        fail(f"views.json не разбирается: {e}")
+        return
+    generator = doc.get("generator", "")
+    try:
+        r = subprocess.run(
+            ["node", "workers/tools/dump_views.ts", "--generator", generator],
+            capture_output=True, timeout=300, cwd=ROOT)
     except FileNotFoundError:
-        fail("python не найден — проверки Rust не было")
+        fail("node не найден — пересъёмка не выполнена")
         return
     except subprocess.TimeoutExpired:
-        fail("check.py не завершился за 30 минут")
+        fail("dump_views.ts не завершился за 5 минут")
         return
-    out = (r.stdout or "") + (r.stderr or "")
-    lines = [ln.strip() for ln in out.splitlines() if re.match(r"\[(OK|WARN|FAIL)\]", ln.strip())]
-    if not lines:
-        fail(f"check.py не вывел ни одной проверки (rc={r.returncode}): {out[-300:]!r}")
+    if r.returncode != 0:
+        fail(f"dump_views.ts упал (rc={r.returncode}): {r.stderr.decode('utf-8', 'replace')[-300:]}")
         return
-    for ln in lines:
-        verdict, msg = ln.split("]", 1)[0].strip("[] "), ln.split("]", 1)[1].strip()
-        if verdict == "OK":
-            ok(msg)
-        elif verdict == "WARN":
-            warn(msg)
-        else:
-            fail(msg)
-    итог = [ln for ln in out.splitlines() if "ИТОГ" in ln]
-    if r.returncode != 0 or not итог:
-        fail(f"check.py: rc={r.returncode}, строки ИТОГ нет")
-    elif итог[-1].split("ИТОГ:")[1].strip(" =") != "FAIL=0, WARN=0":
-        ok(f"гейт Rust: {итог[-1].strip('= ')}")
-    else:
-        ok("гейт Rust: FAIL=0, WARN=0")
-
-
-def check_static(src):
-    """Правила, которые держат лимит 128 МБ, приватность и формат сообщений."""
-    section("ЛОКАЛЬНО: статические правила rust/src")
-
-    banned = [b for b in ("chrono", "aiogram", "tokio", "pytz", "zoneinfo")
-              if re.search(r"\buse\s+%s\b|\b%s::" % (b, b), src["all"], re.M)]
-    if banned:
-        fail(f"запрещённая зависимость в коде: {banned} — в 128 МБ такое не влезает")
-    else:
-        ok("нет datetime-библиотек и async-рантайма: только стандартная библиотека")
-
-    if "TZ_OFFSET_SECS: i64 = 3 * 3600" in src["date"]:
-        ok("фиксированный UTC+3")
-    else:
-        fail("нет фиксированного смещения UTC+3 в rust/src/date.rs")
-
-    guards = len(re.findall(r"!= Some\(self\.owner_id\)", src["bot"]))
-    if guards >= 2 and "fn on_message" in src["bot"] and "fn on_callback" in src["bot"]:
-        ok(f"фильтр владельца в обработчике сообщений и нажатий ({guards} проверки)")
-    else:
-        fail(f"фильтр владельца: проверок на owner — {guards}, нужно минимум 2 "
-             "(on_message и on_callback)")
-
-    if "pub fn esc(" in src["render"] and src["render"].count("esc(") >= 8:
-        ok("экранирование HTML применяется к динамическим строкам")
-    else:
-        fail("подозрение на незаэкранированный вывод: проверь esc() в rust/src/render.rs")
-
-    bad = [f"{name}: {m.group(0)!r}"
-           for name, text in src.items() if name != "all"
-           for lit in re.findall(r'"(?:[^"\\\n]|\\.)*"', text)
-           for m in [EMOJI.search(lit)] if m]
-    if bad:
-        fail("эмодзи в строках бота: " + ", ".join(bad[:5]))
-    else:
-        ok("эмодзи в строках нет")
-
-    if '"\\r\\n"' in src["ics"] and "DTSTAMP:" in src["ics"]:
-        ok(".ics: CRLF и DTSTAMP в UTC — RFC 5545 на месте")
-    else:
-        fail(".ics потерял части RFC 5545 (CRLF / DTSTAMP)")
-
-    if "getUpdates" in src["main"]:
-        ok("транспорт — long polling, вебхуков нет")
-    else:
-        fail("в rust/src/main.rs не нашли getUpdates: polling потерялся")
-
-
-def check_data(src):
-    """Данные: официальные даты недель в тесте, полнота таблицы, границы семестра."""
-    section("ЛОКАЛЬНО: данные расписания")
-    sched = src["schedule"]
-
-    dates = {(int(y), int(m), int(d)): w
-             for y, m, d, w in re.findall(r"\(\((\d+), (\d+), (\d+)\), Weeks::(Over|Under)\)", sched)}
-    if dates == OFFICIAL_WEEKS:
-        ok(f"таблица учебных недель: {len(dates)} официальных дат в тесте совпадают с bteu.by")
-    else:
-        fail(f"даты недель в rust/src/schedule.rs расходятся с официальной таблицей: "
-             f"есть {sorted(dates.items())}, ждём {sorted(OFFICIAL_WEEKS.items())}. "
-             "Если сменился семестр — обнови таблицу «Формирование учебных недель» "
-             "на bteu.by, ANCHOR_MONDAY и этот тест")
-
-    # считаем только стабильную таблицу: литералы замен в тестах не в счёт
-    at = sched.find("const SCHEDULE")
-    table = sched[at:sched.find("/// Тип занятия по предмету", at)] if at >= 0 else ""
-    pairs = len(re.findall(r"^\s+subj:", table, re.M))
-    if pairs >= 25:
-        ok(f"пар в данных: {pairs} записей с учётом вариантов над/под")
-    else:
-        fail(f"в rust/src/schedule.rs только {pairs} записей пар — таблица неполная")
-
-    subjects = set(re.findall(r'subj:\s*(?:\n\s*)?"((?:[^"\\]|\\.)+)"', table))
-    at = sched.find("const KIND")
-    kind_block = sched[at:sched.find("];", at)] if at >= 0 else ""
-    missing = sorted(s for s in subjects if f'"{s}"' not in kind_block)
-    if missing:
-        warn("KIND не покрывает предметы (тип занятия не выведется): " + "; ".join(missing)[:200])
-    else:
-        ok(f"KIND покрывает все {len(subjects)} предметов")
-
-    def const3(name):
-        m = re.search(rf"{name}: Date = Date::new_const\((\d+), (\d+), (\d+)\)", sched)
-        return tuple(int(v) for v in m.groups()) if m else None
-
-    start, end, anchor = const3("SEMESTER_START"), const3("SEMESTER_END"), const3("ANCHOR_MONDAY")
-    if start and end and anchor and start < end and anchor[2] == 21:
-        ok(f"семестр {start}..{end}, якорь {anchor} (понедельник под-недели)")
-    else:
-        fail(f"границы семестра или якорь подозрительные: {start}, {end}, {anchor}")
-
-    today = subprocess.run([sys.executable, "-c",
-                            "from datetime import date; print(date.today().isoformat())"],
-                           capture_output=True, text=True).stdout.strip()
-    if end and today > "%04d-%02d-%02d" % end:
-        warn(f"данные кончились: сегодня {today}, а семестр до {end} — везде «пар нет»")
-
-    at = sched.find("pub const SUBSTITUTIONS")
-    block = sched[at:sched.find("];", at)] if at >= 0 else ""
-    subs = re.findall(
-        r"Sub\s*\{\s*day:\s*\((\d+),\s*(\d+),\s*(\d+)\),\s*num:\s*(\d+)", block, re.S)
-    if not subs:
-        ok("датных замен в данных нет — бот показывает стабильную таблицу")
-    else:
-        bad = []
-        for y, m, d, num in subs:
-            iso = "%04d-%02d-%02d" % (int(y), int(m), int(d))
-            if not 1 <= int(num) <= 7:
-                bad.append(f"слот {num} в {iso}")
-            if start and not ("%04d-%02d-%02d" % start <= iso <= "%04d-%02d-%02d" % end):
-                bad.append(f"дата {iso} вне семестра")
-        if bad:
-            fail("замены с ошибками: " + ", ".join(bad))
-        else:
-            ok(f"датных замен: {len(subs)} — вне семестра и чужих слотов нет "
-               "(свежесть против сайта проверяет check_site.py)")
-
-
-# ---------------------------------------------------------------- сеть
-WORKERS = ROOT / "workers"
-WORKERS_TESTS = ["date", "schedule", "render", "ics", "parity", "handlers", "index"]
+    fresh = r.stdout
+    frozen = fixture.read_bytes()
+    if fresh == frozen:
+        ok(f"dump_views.ts воспроизводит эталон байт-в-байт ({len(doc.get('cases', []))} видов)")
+        return
+    n = min(len(fresh), len(frozen))
+    pos = next((i for i in range(n) if fresh[i] != frozen[i]), n)
+    fail(f"переснятый эталон расходится с фикстурой: первое различие на байте {pos} "
+         f"(переснято {len(fresh)}, заморожено {len(frozen)}). "
+         "Если смену поведения планировали — пересними фикстуру dump_views.ts и "
+         "прочитай diff; если нет — ищи, что поломалось")
 
 
 def check_workers():
-    """Порт на Cloudflare Workers: тесты node, типы, статика нового кода.
-
-    Главный тест здесь — паритет: порт пересчитывает те же 7600 снимков видов
-    и 70 вызовов обработчиков против замороженных фикстур rust/tests/fixtures.
-    """
-    section("ЛОКАЛЬНО: порт Workers — тесты, типы, статика")
+    """Воркер: тесты node с паритетом внутри, типы, статические правила."""
+    section("ЛОКАЛЬНО: воркер Workers — тесты, типы, статика")
     if not (WORKERS / "package.json").exists():
-        warn("папки workers нет — порт не проверялся")
+        fail("папки workers нет")
         return
     test_files = [str(WORKERS / "test" / f"{n}.test.ts") for n in WORKERS_TESTS]
     missing = [f for f in test_files if not Path(f).exists()]
     if missing:
-        fail("нет тестов порта: " + ", ".join(Path(f).name for f in missing))
+        fail("нет тестов воркера: " + ", ".join(Path(f).name for f in missing))
         return
     try:
         r = subprocess.run(["node", "--test", *test_files],
                            capture_output=True, text=True, encoding="utf-8",
                            errors="replace", cwd=ROOT, timeout=600)
     except FileNotFoundError:
-        fail("node не найден — порт Workers не проверялся")
+        fail("node не найден — воркер не проверялся")
         return
     except subprocess.TimeoutExpired:
         fail("node --test не завершился за 10 минут")
@@ -257,7 +162,7 @@ def check_workers():
         tail = "\n".join(ln for ln in (r.stdout + r.stderr).splitlines() if ln.strip())[-500:]
         fail(f"node --test: rc={r.returncode}, провалено {failed} — порт расходится с эталоном\n{tail}")
     else:
-        ok(f"порт Workers: {m_pass.group(1) if m_pass else '?'} тестов зелёные "
+        ok(f"воркер: {m_pass.group(1) if m_pass else '?'} тестов зелёные "
            "(паритет 7600 видов и 70 вызовов внутри)")
 
     if not (WORKERS / "node_modules" / "typescript").exists():
@@ -279,13 +184,13 @@ def check_workers():
 
     guards = len(re.findall(r"\?\.id !== this\.ownerId", wsrc.get("bot", "")))
     if guards >= 2:
-        ok(f"фильтр владельца в порте обработчиков ({guards} проверки)")
+        ok(f"фильтр владельца в обработчиках сообщений и нажатий ({guards} проверки)")
     else:
         fail(f"в workers/src/bot.ts проверок на owner — {guards}, нужно минимум 2")
 
     chats = len(re.findall(r"chatId !== this\.ownerId", wsrc.get("bot", "")))
     if chats >= 2:
-        ok(f"страховка chat_id в порте обработчиков ({chats} проверки)")
+        ok(f"страховка chat_id в обработчиках ({chats} проверки)")
     else:
         fail(f"в workers/src/bot.ts страховок chat_id — {chats}, нужно минимум 2")
 
@@ -320,6 +225,78 @@ def check_workers():
         fail("нет workers/wrangler.jsonc")
 
 
+def check_data():
+    """Данные: официальные даты недель в тесте, полнота таблицы, границы семестра."""
+    section("ЛОКАЛЬНО: данные расписания")
+    sched = (WORKERS / "src" / "schedule.ts").read_text(encoding="utf-8")
+    tests = (WORKERS / "test" / "schedule.test.ts").read_text(encoding="utf-8")
+
+    dates = {(int(y), int(m), int(d)): w
+             for y, m, d, w in re.findall(r"\[\[(\d+), (\d+), (\d+)\], \"(Over|Under)\"\]", tests)}
+    if dates == OFFICIAL_WEEKS:
+        ok(f"таблица учебных недель: {len(dates)} официальных дат в тесте совпадают с bteu.by")
+    else:
+        fail(f"даты недель в workers/test/schedule.test.ts расходятся с официальной таблицей: "
+             f"есть {sorted(dates.items())}, ждём {sorted(OFFICIAL_WEEKS.items())}. "
+             "Если сменился семестр — обнови таблицу «Формирование учебных недель» "
+             "на bteu.by, ANCHOR_MONDAY и этот тест")
+
+    # считаем только стабильную таблицу: литералы замен в тестах не в счёт
+    at = sched.find("const SCHEDULE")
+    table = sched[at:sched.find("/// Тип занятия по предмету", at)] if at >= 0 else ""
+    pairs = len(re.findall(r"^\s+subj:", table, re.M))
+    if pairs >= 25:
+        ok(f"пар в данных: {pairs} записей с учётом вариантов над/под")
+    else:
+        fail(f"в workers/src/schedule.ts только {pairs} записей пар — таблица неполная")
+
+    subjects = set(re.findall(r'subj:\s*(?:\n\s*)?"((?:[^"\\]|\\.)+)"', table))
+    at = sched.find("const KIND")
+    kind_block = sched[at:sched.find("];", at)] if at >= 0 else ""
+    missing = sorted(s for s in subjects if f'"{s}"' not in kind_block)
+    if missing:
+        warn("KIND не покрывает предметы (тип занятия не выведется): " + "; ".join(missing)[:200])
+    else:
+        ok(f"KIND покрывает все {len(subjects)} предметов")
+
+    def const3(name):
+        m = re.search(rf"{name}: Date = Date\.newConst\((\d+), (\d+), (\d+)\)", sched)
+        return tuple(int(v) for v in m.groups()) if m else None
+
+    start, end, anchor = const3("SEMESTER_START"), const3("SEMESTER_END"), const3("ANCHOR_MONDAY")
+    if start and end and anchor and start < end and anchor[2] == 21:
+        ok(f"семестр {start}..{end}, якорь {anchor} (понедельник под-недели)")
+    else:
+        fail(f"границы семестра или якорь подозрительные: {start}, {end}, {anchor}")
+
+    today = subprocess.run([sys.executable, "-c",
+                            "from datetime import date; print(date.today().isoformat())"],
+                           capture_output=True, text=True).stdout.strip()
+    if end and today > "%04d-%02d-%02d" % end:
+        warn(f"данные кончились: сегодня {today}, а семестр до {end} — везде «пар нет»")
+
+    at = sched.find("export const SUBSTITUTIONS")
+    block = sched[at:sched.find("\n];", at)] if at >= 0 else ""
+    subs = re.findall(
+        r"day:\s*\[(\d+),\s*(\d+),\s*(\d+)\],\s*\n\s*num:\s*(\d+)", block)
+    if not subs:
+        ok("датных замен в данных нет — бот показывает стабильную таблицу")
+    else:
+        bad = []
+        for y, m, d, num in subs:
+            iso = "%04d-%02d-%02d" % (int(y), int(m), int(d))
+            if not 1 <= int(num) <= 7:
+                bad.append(f"слот {num} в {iso}")
+            if start and not ("%04d-%02d-%02d" % start <= iso <= "%04d-%02d-%02d" % end):
+                bad.append(f"дата {iso} вне семестра")
+        if bad:
+            fail("замены с ошибками: " + ", ".join(bad))
+        else:
+            ok(f"датных замен: {len(subs)} — вне семестра и чужих слотов нет "
+               "(свежесть против сайта проверяет tools/check_site.py)")
+
+
+# ---------------------------------------------------------------- сеть
 WORKER_URL = "https://a11-bot.egor-kuzko-04.workers.dev"
 
 
@@ -439,93 +416,19 @@ def check_prod(env):
         fail("409 не получен — прод-бот не держит ни polling, ни вебхук")
 
 
-def check_deploy():
-    section("ПРОД: автодеплой GitHub Actions")
-    try:
-        r = subprocess.run(
-            ["gh", "run", "list", "--workflow=deploy.yml", "--limit", "1",
-             "--json", "displayTitle,conclusion,createdAt"],
-            capture_output=True, text=True, timeout=30, cwd=ROOT)
-        runs = json.loads(r.stdout or "[]")
-        if runs:
-            run = runs[0]
-            concl = run.get("conclusion") or "in_progress"
-            (ok if concl == "success" else warn)(
-                f"последний деплой: {concl} — {run.get('displayTitle', '')[:60]} "
-                f"({run.get('createdAt', '')[:16]} UTC)")
-        else:
-            warn("gh: нет запусков деплоя")
-    except FileNotFoundError:
-        warn("gh CLI не найден — статус деплоя пропущен")
-    except Exception as e:
-        warn(f"gh: {e}")
-
-
-def check_panel(env):
-    section("ПРОД: контейнер fps.ms")
-    key, uuid = env.get("FPSMS_API_KEY"), env.get("FPSMS_SERVER_UUID")
-    if not (key and uuid):
-        warn("нет FPSMS_API_KEY/FPSMS_SERVER_UUID в .env — панель пропущена")
-        return
-    try:
-        r = subprocess.run(
-            ["curl", "-s", "--max-time", "20",
-             f"https://panel.fps.ms/api/client/servers/{uuid}/resources",
-             "-H", f"Authorization: Bearer {key}", "-H", "Accept: application/json",
-             "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0.0.0 Safari/537.36"],
-            capture_output=True, text=True, timeout=30)
-        data = json.loads(r.stdout)
-        if isinstance(data, dict) and data.get("errors"):
-            detail = json.dumps(data["errors"], ensure_ascii=False)
-            if "suspend" in detail.lower() or "ServerStateConflict" in detail:
-                # после переезда на Workers это ожидаемо: срок сервера истёк
-                warn("панель: сервер suspended — срок истёк, прод живёт на Workers")
-                return
-            fail(f"панель: непонятная ошибка {detail[:150]}")
-            return
-        a = data.get("attributes", {})
-        res = a.get("resources", {})
-        mem = res.get("memory_bytes", 0) / 1048576
-        up = res.get("uptime")
-        state = a.get("current_state")
-        suspended = a.get("is_suspended")
-        # панель отдаёт uptime в миллисекундах: 10 часов — это ~36 000 000, а не 36 000
-        up_txt = f", uptime {up / 3_600_000:.1f} ч" if up is not None else ""
-        if state == "running" and not suspended:
-            ok(f"контейнер running, память {mem:.0f} МБ{up_txt}")
-        elif suspended:
-            # после переключения на Workers это ожидаемо: срок сервера истёк,
-            # контейнер не работает, продление ручное и нужно только для отката
-            warn("контейнер suspended — сервер приостановлен, прод живёт на Workers")
-        elif state == "stopped":
-            # штатное состояние после переключения на Workers: запаска выключена
-            warn("контейнер stopped — переключено на Workers, запаска выключена")
-        else:
-            fail(f"контейнер {state}")
-        if mem >= 120:
-            fail(f"память контейнера {mem:.0f} МБ — у лимита 128 МБ")
-    except Exception as e:
-        warn(f"панель: {e.__class__.__name__}: {str(e)[:150]}")
-
-
 def main():
     local_only = "--local" in sys.argv
     sys.stdout.reconfigure(encoding="utf-8")
 
-    src = {p.stem: p.read_text(encoding="utf-8") for p in sorted(RUST_SRC.glob("*.rs"))}
-    src["all"] = "\n".join(src.values())
-
-    check_rust()
-    check_static(src)
-    check_data(src)
+    check_fixtures()
+    check_dump_parity()
     check_workers()
+    check_data()
 
     if not local_only:
         env = load_env()
         check_prod(env)
-        check_deploy()
         check_workers_prod(env)
-        check_panel(env)
 
     print(f"\n=== ИТОГ: FAIL={len(FAILS)}, WARN={len(WARNS)} ===")
     for f in FAILS:

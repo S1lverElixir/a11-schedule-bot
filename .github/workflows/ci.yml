@@ -1,0 +1,33 @@
+# Локальная часть гейта на каждый пуш в main: тесты с паритетом фикстур,
+# пересъёмка эталона, типы, статика, данные. Деплой ручной; живость прод-бота
+# смотрит healthcheck.yml по расписанию.
+name: ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "workers/**"
+      - "tools/**"
+      - ".agents/**"
+      - ".github/workflows/ci.yml"
+  workflow_dispatch:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+
+      - name: Зависимости воркера
+        run: npm ci
+        working-directory: workers
+
+      - name: Гейт (локальная часть)
+        run: python3 -X utf8 .agents/skills/verify-bot/scripts/verify_bot.py --local
+        env:
+          PYTHONUTF8: "1"

@@ -1,7 +1,8 @@
-//! Замороженные снимки поведения прежнего Python-бота: каждый случай из
-//! rust/tests/fixtures/views.json пересчитывается портом и сравнивается байт-в-байт.
+//! Замороженные снимки поведения бота: каждый случай из views.json пересчитывается
+//! портом и сравнивается байт-в-байт. Снимок строит tools-скрипт dump_views.ts —
+//! гейт дополнительно сверяет его вывод с фикстурой.
 //!
-//! Это главная проверка переноса: если порт расходится с эталоном, виноват порт —
+//! Это главная проверка: если порт расходится с эталоном, виноват порт —
 //! фикстуры не редактируются.
 
 import { test } from "node:test";
@@ -13,7 +14,7 @@ import { caseNames, valueFor } from "../src/snapshot.ts";
 
 const FIXTURE_PATH = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  "../../rust/tests/fixtures/views.json",
+  "./fixtures/views.json",
 );
 
 function short(v: unknown): string {

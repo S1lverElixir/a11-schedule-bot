@@ -22,7 +22,7 @@ if (!url) {
   process.exit(1);
 }
 
-// разбор .env как у run.py: BOM, комментарии, кавычки
+// разбор .env: BOM, комментарии, парные кавычки
 function readToken() {
   let text;
   try {

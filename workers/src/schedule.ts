@@ -1,7 +1,7 @@
 //! Данные расписания группы А-11 — единственный источник правды.
 //!
-//! Дословный порт rust/src/schedule.rs: имена предметов, аудитории, преподаватели
-//! и границы копируются как есть, без «улучшений» и переименований.
+//! Имена предметов, аудитории, преподаватели и границы копируются как есть,
+//! без «улучшений» и переименований.
 //!
 //! Запись пары: номер, начало, конец, предмет, аудитории, преподаватели, недели.
 //! - аудитории — строка как в таблице («2-11», «3-36,3-24») или null без аудитории;
@@ -18,7 +18,7 @@
 //! Отсюда пары только над чертой: понедельник 14:40 (инф. час), четверг 09:00 (ОС),
 //! пятница 14:40 (политэкономия) — в под-неделях их нет.
 
-import { Date } from "./date.ts";
+import { Date, pad2, pad4 } from "./date.ts";
 
 /// Границы семестра: пределы календаря «Выбрать день»; вне их — каникулы, «пар нет».
 export const SEMESTER_START: Date = Date.newConst(2026, 9, 1);
@@ -86,7 +86,7 @@ export interface Sub {
 }
 
 /// Замены на текущий семестр: их выкладывает деканат на странице «Начитка» и в
-/// графике кураторского часа. Сверяет rust/tools/check_site.py; пусто — значит по
+/// графике кураторского часа. Сверяет tools/check_site.py; пусто — значит по
 /// сайту замен нет, и бот показывает только стабильное расписание.
 export const SUBSTITUTIONS: readonly Sub[] = [
   // график «ЧАС КУРАТОРА ФЭУ» на bteu.by: 16.12 в 12:55 ауд. 3-16 вместо 3-й пары
@@ -538,3 +538,46 @@ export const BELLS: readonly Bell[] = [
     br: null,
   },
 ];
+
+/// Машинный дамп данных для сверки с сайтом: его печатает workers/tools/dump_schedule.ts,
+/// читает tools/check_site.py. Ключи и форма значений — как у прежнего
+/// --dump-schedule Rust-бота: неделя строкой («над»/«под»/«both»), замены датой ISO,
+/// отсутствующая аудитория — пустая строка вместо null.
+export function dumpSchedule(): object {
+  const days = SCHEDULE.map((rows) =>
+    rows.map((r) => ({
+      num: r.num,
+      start: r.start,
+      end: r.end,
+      subj: r.subj,
+      rooms: r.rooms ?? "",
+      teachers: r.teachers,
+      weeks: weeksLabel(r.weeks),
+    })),
+  );
+  const subs = SUBSTITUTIONS.map((s) => ({
+    date: `${pad4(s.day[0])}-${pad2(s.day[1])}-${pad2(s.day[2])}`,
+    num: s.num,
+    start: s.start,
+    end: s.end,
+    subj: s.subj,
+    rooms: s.rooms ?? "",
+    teachers: s.teachers,
+  }));
+  const bells = BELLS.map((b) => ({
+    num: b.num,
+    start: b.start,
+    end: b.end,
+    first: b.first,
+    second: b.second,
+    break: b.br ?? "",
+  }));
+  return {
+    semester: [SEMESTER_START.fmtIso(), SEMESTER_END.fmtIso()],
+    anchor_monday: ANCHOR_MONDAY.fmtIso(),
+    days,
+    substitutions: subs,
+    kind: KIND.map(([name, k]) => [name, k]),
+    bells,
+  };
+}
