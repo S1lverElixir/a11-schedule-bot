@@ -21,10 +21,13 @@
 
 import datetime as dt
 import html
+import ipaddress
 import json
 import re
+import socket
 import subprocess
 import sys
+import urllib.parse
 import urllib.request
 
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0"}
@@ -73,8 +76,36 @@ def fail(msg):
 FAILS = []
 
 
+def _check_url(url):
+    """Адрес разрешён, только если это https://bteu.by с публичным адресом: ссылки
+    вычитываются со страниц сайта, и подделка в ответе не должна уводить запрос
+    на внутренние или чужие хосты."""
+    parts = urllib.parse.urlparse(url)
+    if parts.scheme != "https" or parts.hostname != "bteu.by":
+        raise ValueError(f"адрес вне https://bteu.by запрещён: {url}")
+    port = parts.port or 443
+    for ai in socket.getaddrinfo(parts.hostname, port, proto=socket.IPPROTO_TCP):
+        ip = ipaddress.ip_address(ai[4][0])
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_unspecified):
+            raise ValueError(f"хост bteu.by разбирается в закрытую сеть ({ip})")
+    return parts
+
+
+class _SiteRedirects(urllib.request.HTTPRedirectHandler):
+    """Редиректы проходят тот же замок, что и исходный адрес."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        _check_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_OPENER = urllib.request.build_opener(_SiteRedirects())
+
+
 def get(url, timeout=90):
-    return urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=timeout).read()
+    _check_url(url)
+    return _OPENER.open(urllib.request.Request(url, headers=UA), timeout=timeout).read()
 
 
 def page(pid):
