@@ -81,12 +81,11 @@ def _check_url(url):
     вычитываются со страниц сайта, и подделка в ответе не должна уводить запрос
     на внутренние или чужие хосты."""
     parts = urllib.parse.urlparse(url)
-    if parts.scheme != "https" or parts.hostname != "bteu.by":
-        raise ValueError(f"адрес вне https://bteu.by запрещён: {url}")
-    port = parts.port or 443
-    for ai in socket.getaddrinfo(parts.hostname, port, proto=socket.IPPROTO_TCP):
+    if parts.scheme != "https" or parts.hostname != "bteu.by" or parts.port not in (None, 443):
+        raise ValueError(f"адрес вне https://bteu.by:443 запрещён: {url}")
+    for ai in socket.getaddrinfo(parts.hostname, 443, proto=socket.IPPROTO_TCP):
         ip = ipaddress.ip_address(ai[4][0])
-        if (ip.is_private or ip.is_loopback or ip.is_link_local
+        if (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast
                 or ip.is_reserved or ip.is_unspecified):
             raise ValueError(f"хост bteu.by разбирается в закрытую сеть ({ip})")
     return parts
@@ -321,6 +320,54 @@ def compare_base(site, ours):
         ok(f"стабильная таблица совпала с ботом (7 дней, {sum(len(v) for v in site.values())} слотов)")
 
 
+def case_type(subj):
+    """Тип по регистру предмета: заглавных букв строго больше — «Лекция»,
+    строчных — «Практика»; неоднозначный регистр — None (не сверяем)."""
+    letters = [ch for ch in subj if ch.lower() in "абвгдеёжзийклмнопрстуфхцчшщъыьэюя"]
+    up = sum(1 for ch in letters if ch.isupper())
+    low = sum(1 for ch in letters if ch.islower())
+    if up + low == 0 or up == low:
+        return None
+    return "Лекция" if up > low else "Практика"
+
+
+def compare_kinds(site, ours):
+    """Тип каждой пары бота против регистра предмета в таблице: заглавными набраны
+    лекции, строчными практика; инф. час набран заглавными, но типа не имеет.
+    Держит правило регистра под ежедневной сверкой, а не только ручным коммитом."""
+    bad = checked = skipped = 0
+    daynames = "пн вт ср чт пт сб вс".split()
+    for day in sorted(site):
+        for slot in sorted(site[day]):
+            for half in ("над", "под"):
+                raw = site[day][slot][half]
+                if not raw:
+                    continue
+                subj = split_entry(raw)[0]
+                # split_entry снимает дату действия только у записей без аудитории,
+                # у «1-21 с 24.09.26 …» префикс остаётся в предмете
+                subj = re.sub(r"^с\s*\d{2}\.\d{2}(\.\d{2,4})?\.?\s*", "", subj)
+                rule = "" if subj.upper() == "ИНФОРМАЦИОННЫЙ ЧАС" else case_type(subj)
+                if rule is None:
+                    skipped += 1
+                    continue
+                match = next((p for p in ours["days"][day]
+                              if p["num"] == slot
+                              and (p["weeks"] in ("над", "both") if half == "над"
+                                   else p["weeks"] in ("под", "both"))), None)
+                if match is None:
+                    fail(f"тип пары: {daynames[day]} слот {slot} ({half}) — записи в боте нет")
+                    bad += 1
+                    continue
+                checked += 1
+                if match["kind"] != rule:
+                    fail(f"тип пары: {daynames[day]} слот {slot} ({half}) «{subj[:40]}»: "
+                         f"регистр таблицы = {rule}, в боте «{match['kind']}»")
+                    bad += 1
+    if not bad:
+        ok(f"типы пар совпали с регистром таблицы ({checked} сверено, {skipped} неоднозначных пропущено)")
+
+
 def main():
     emit = "--emit" in sys.argv
     ours = our_data()
@@ -332,13 +379,18 @@ def main():
         fail("на странице «Стабильное расписание» не нашли файл потока А-1")
         return 1
     label, url = stable[0]
-    rows = read_sheet(get(url))
+    try:
+        rows = read_sheet(get(url))
+    except ValueError as e:
+        warn(f"{label}: адрес файла не прошёл замок ({e}) — прогон прерван")
+        return 1
     col, block = group_block(rows)
     if col is None:
         fail(f"в файле {label} нет колонки {GROUP_COLUMN}")
         return 1
     site = parse_week_table(block, col)
     compare_base(site, ours)
+    compare_kinds(site, ours)
 
     # 2) черта недели
     weeks = weeks_table()
@@ -369,7 +421,11 @@ def main():
         a, b = rng
         if b < today - dt.timedelta(days=7):
             continue
-        rows2 = read_sheet(get(url))
+        try:
+            rows2 = read_sheet(get(url))
+        except ValueError as e:
+            warn(f"{label}: адрес файла не прошёл замок ({e})")
+            continue
         col2, block2 = group_block(rows2)
         if col2 is None:
             continue
