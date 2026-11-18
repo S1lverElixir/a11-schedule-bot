@@ -95,7 +95,7 @@ git push origin main                             # only when the owner asked in 
 - One change at a time; no unrelated refactors in the same commit.
 - Russian comments, docstrings and bot strings; a comment explains why, never what the code does.
 - Render in functions that build text without sending it and without touching the network, so the gate can check every view.
-- Copy data strings verbatim: rooms «3-27,3-30», teachers with their position «доц. Кузьменкова И.А.». Check surnames against the department site; the source `.xls` is not in this repo.
+- Copy data strings verbatim: rooms «3-27,3-30», teachers with their position «доц. Кузменкова И.А.». Check surnames against the department site; the source `.xls` is not in this repo.
 - Targeted edits on existing files: no reformatting of untouched code, no commented-out code.
 - Banned: emojis, filler («Важно», «Здесь мы»), restating the code.
 

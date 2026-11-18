@@ -49,7 +49,7 @@ function sub(num: number, start: string, end: string, subj: string): Sub {
     end,
     subj,
     rooms: "1-9",
-    teachers: ["доц. Кузьменкова И.А."],
+    teachers: ["доц. Кузменкова И.А."],
   };
 }
 
