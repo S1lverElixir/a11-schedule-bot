@@ -20,7 +20,6 @@ import {
   SEMESTER_START,
   cancelledNums,
   dayPairs,
-  kind,
   weekLabel,
   type Pair,
 } from "./schedule.ts";
@@ -105,12 +104,12 @@ function roomsTail(rooms: string | null): string {
 /// «N (HH:MM) Предмет[, ауд. …][ · замена]».
 function pairLine(p: Pair): string {
   const tail = p.sub ? " · замена" : "";
-  return `${p.num} (${p.start}) ${subjectTitle(p.subj)}${roomsTail(p.rooms)}${tail}`;
+  return `${p.num} (${p.start}) ${subjectTitle(p.subj, p.kind)}${roomsTail(p.rooms)}${tail}`;
 }
 
-/// Заголовок предмета с типом занятия через « · ».
-function subjectTitle(subj: string): string {
-  const k = kind(subj);
+/// Заголовок предмета с типом занятия через « · »; тип приходит с парой —
+/// у одного предмета типы бывают разные (матан: пн практика, вт лекция).
+function subjectTitle(subj: string, k: string): string {
   return k === "" ? esc(subj) : `${k} · ${esc(subj)}`;
 }
 
@@ -119,8 +118,8 @@ function subjectTitle(subj: string): string {
 function pairBlock(p: Pair, note: string | null): string {
   const rooms = p.rooms !== null && p.rooms !== "";
   const second = rooms
-    ? `${subjectTitle(p.subj)}, ауд. ${fmtRooms(p.rooms)}`
-    : subjectTitle(p.subj);
+    ? `${subjectTitle(p.subj, p.kind)}, ауд. ${fmtRooms(p.rooms)}`
+    : subjectTitle(p.subj, p.kind);
   const teachers = esc(p.teachers.join(", "));
   let text = `<b>${p.num}-я пара ${p.start}–${p.end}</b>${
     p.sub ? "<i> · замена</i>" : ""

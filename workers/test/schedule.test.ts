@@ -13,7 +13,6 @@ import {
   SUBSTITUTIONS,
   dayPairs,
   dayPairsWith,
-  kind,
   subsOn,
   weekMark,
   type Sub,
@@ -122,11 +121,28 @@ test("константная замена попадает в свой день"
   assert.equal(SUBSTITUTIONS.length, 1);
 });
 
-test("типы занятий", () => {
-  assert.equal(kind("Математический анализ"), "Лекция");
-  assert.equal(kind("Физическая культура"), "Практика");
-  assert.equal(kind("Информационный час"), "");
-  assert.equal(kind("Такого предмета нет"), "");
+test("типы занятий — из регистра предмета в таблице сайта", () => {
+  // пн 16.11.2026 (под): матан набран строчными — практика,
+  // КИТ капсом и всей группой в 1-2 — лекция
+  const mon = dayPairs(Date.new(2026, 11, 16)!);
+  assert.equal(mon.find((p) => p.num === 2)!.kind, "Практика");
+  assert.equal(mon.find((p) => p.num === 3)!.kind, "Лекция");
+  // пн 23.11.2026 (над): ИСТКД строчными — практика, инф. час без типа
+  const monOver = dayPairs(Date.new(2026, 11, 23)!);
+  assert.equal(monOver.find((p) => p.num === 3)!.kind, "Практика");
+  assert.equal(monOver.find((p) => p.num === 4)!.kind, "");
+  // вт: матан капсом — лекция, ОАиП на 4-й паре лекция и на 5-й практика
+  const tue = dayPairs(Date.new(2026, 11, 17)!);
+  assert.equal(tue.find((p) => p.num === 3)!.kind, "Лекция");
+  assert.equal(tue.find((p) => p.num === 4)!.kind, "Лекция");
+  assert.equal(tue.find((p) => p.num === 5)!.kind, "Практика");
+  // сб под-недели: 1-я пара линала лекция, 2-я практика
+  const sat = dayPairs(Date.new(2026, 11, 21)!);
+  assert.equal(sat.find((p) => p.num === 1)!.kind, "Лекция");
+  assert.equal(sat.find((p) => p.num === 2)!.kind, "Практика");
+  // замена («Час куратора») без типа
+  const wed = dayPairs(Date.new(2026, 12, 16)!);
+  assert.ok(wed.some((p) => p.sub && p.kind === ""));
 });
 
 test("звонки: пары 1–5 группы А-11 и два ночных слота", () => {
@@ -139,14 +155,14 @@ test("звонки: пары 1–5 группы А-11 и два ночных с�
 test("dumpSchedule: форма данных для сверки с сайтом", () => {
   const doc = dumpSchedule() as Record<string, unknown>;
   assert.deepEqual(Object.keys(doc).sort(), [
-    "anchor_monday", "bells", "days", "kind", "semester", "substitutions",
+    "anchor_monday", "bells", "days", "semester", "substitutions",
   ]);
   assert.deepEqual(doc["semester"], ["2026-09-01", "2026-12-31"]);
   assert.equal(doc["anchor_monday"], "2026-09-21");
   const days = doc["days"] as Record<string, unknown>[][];
   assert.equal(days.length, 7);
   assert.deepEqual(Object.keys(days[0][0]).sort(), [
-    "end", "num", "rooms", "start", "subj", "teachers", "weeks",
+    "end", "kind", "num", "rooms", "start", "subj", "teachers", "weeks",
   ]);
   const subs = doc["substitutions"] as Record<string, unknown>[];
   assert.equal(subs.length, 1);

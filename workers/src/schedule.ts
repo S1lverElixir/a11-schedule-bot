@@ -3,9 +3,10 @@
 //! Имена предметов, аудитории, преподаватели и границы копируются как есть,
 //! без «улучшений» и переименований.
 //!
-//! Запись пары: номер, начало, конец, предмет, аудитории, преподаватели, недели.
+//! Запись пары: номер, начало, конец, предмет, аудитории, преподаватели, недели, тип.
 //! - аудитории — строка как в таблице («2-11», «3-36,3-24») или null без аудитории;
 //! - недели: Both — в обе, Over — только над чертой, Under — только под чертой;
+//! - тип: «Лекция»/«Практика»/«» — без типа идут инф. час и замены;
 //! - должность входит в строку преподавателя дословно из таблицы: доц., ст.пр., пр., пр.-ст.;
 //! - ключи SCHEDULE — номер дня, 0 — понедельник, 6 — воскресенье.
 //!
@@ -17,6 +18,13 @@
 //! «с 21.09 / 24.09 / 25.09 / 26.09.26», и все они лежат в одной неделе 21–27.09.2026.
 //! Отсюда пары только над чертой: понедельник 14:40 (инф. час), четверг 09:00 (ОС),
 //! пятница 14:40 (политэкономия) — в под-неделях их нет.
+//!
+//! Тип пары взят из регистра предмета в a-1.xls: набрано заглавными — лекция,
+//! строчными — практика. Правило механически сверено со всеми 27 парами таблицы
+//! и подтверждено другим ботом расписания А-11 (четверг под-недели) и занятиями
+//! группы: матан в понедельник — практика, во вторник — лекция. Сайт типов не
+//! публикует, старое правило «одна аудитория + один преподаватель = лекция»
+//! ошибалось на 8 парах.
 
 import { Date, pad2, pad4 } from "./date.ts";
 
@@ -58,6 +66,7 @@ interface Row {
   rooms: string | null;
   teachers: string[];
   weeks: Weeks;
+  kind: string;
 }
 
 /// То, что бот показывает на слоте дня: строка таблицы (sub=false) либо замена
@@ -70,6 +79,7 @@ export interface Pair {
   rooms: string | null;
   teachers: string[];
   weeks: Weeks;
+  kind: string;
   sub: boolean;
 }
 
@@ -110,6 +120,7 @@ function fromRow(r: Row): Pair {
     rooms: r.rooms,
     teachers: r.teachers,
     weeks: r.weeks,
+    kind: r.kind,
     sub: false,
   };
 }
@@ -124,6 +135,7 @@ function fromSub(s: Sub): Pair {
     teachers: s.teachers,
     // дата задана прямо, черта недели к замене не применяется
     weeks: "Both",
+    kind: "",
     sub: true,
   };
 }
@@ -167,14 +179,6 @@ export function dayPairsWith(d: Date, subs: readonly Sub[]): Pair[] {
   return out;
 }
 
-/// Тип занятия по предмету; пустая строка — тип не выводится.
-export function kind(subj: string): string {
-  for (const [name, k] of KIND) {
-    if (name === subj) return k;
-  }
-  return "";
-}
-
 const SCHEDULE: readonly (readonly Row[])[] = [
   // понедельник
   [
@@ -190,6 +194,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
         "ст.пр. Степанцов В.М.",
       ],
       weeks: "Both",
+      kind: "Практика",
     },
     {
       num: 2,
@@ -199,6 +204,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "1-13",
       teachers: ["доц. Кузьменкова И.А."],
       weeks: "Both",
+      kind: "Практика",
     },
     {
       num: 3,
@@ -208,6 +214,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "1-9",
       teachers: ["доц. Котов И.С."],
       weeks: "Over",
+      kind: "Практика",
     },
     {
       num: 3,
@@ -217,6 +224,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "1-2",
       teachers: ["доц. Лебедева Е.В."],
       weeks: "Under",
+      kind: "Лекция",
     },
     {
       num: 4,
@@ -226,6 +234,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "3-27",
       teachers: ["ст.пр. Игнатьев А.М."],
       weeks: "Over",
+      kind: "",
     },
   ],
   // вторник
@@ -238,6 +247,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "1-13",
       teachers: ["ст.пр. Барабанова И.В."],
       weeks: "Both",
+      kind: "Практика",
     },
     {
       num: 3,
@@ -247,6 +257,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "1-13",
       teachers: ["доц. Кузьменкова И.А."],
       weeks: "Both",
+      kind: "Лекция",
     },
     {
       num: 4,
@@ -256,6 +267,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "1-14",
       teachers: ["пр. Сыч Д.С."],
       weeks: "Both",
+      kind: "Лекция",
     },
     {
       num: 5,
@@ -265,6 +277,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "3-27,3-30",
       teachers: ["пр. Сыч Д.С.", "пр. Шкрабков Я.Н."],
       weeks: "Both",
+      kind: "Практика",
     },
   ],
   // среда
@@ -281,6 +294,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
         "ст.пр. Степанцов В.М.",
       ],
       weeks: "Both",
+      kind: "Практика",
     },
     {
       num: 2,
@@ -290,6 +304,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "2-3",
       teachers: ["ст.пр. Селицкая Е.Ю."],
       weeks: "Both",
+      kind: "Практика",
     },
     {
       num: 3,
@@ -299,6 +314,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "2-3",
       teachers: ["ст.пр. Селицкая Е.Ю."],
       weeks: "Both",
+      kind: "Практика",
     },
   ],
   // четверг
@@ -311,6 +327,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "3-36,3-24",
       teachers: ["ст.пр. Воруева В.И.", "ст.пр. Сон С.Б."],
       weeks: "Over",
+      kind: "Практика",
     },
     {
       num: 2,
@@ -320,6 +337,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "1-25",
       teachers: ["доц. Кузьменкова И.А."],
       weeks: "Over",
+      kind: "Лекция",
     },
     {
       num: 2,
@@ -329,6 +347,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "1-2",
       teachers: ["доц. Котов И.С."],
       weeks: "Under",
+      kind: "Лекция",
     },
     {
       num: 3,
@@ -338,6 +357,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "2-22,3-16",
       teachers: ["ст.пр. Конша И.Г.", "пр.-ст. Днепровский А.Р."],
       weeks: "Over",
+      kind: "Практика",
     },
     {
       num: 3,
@@ -347,6 +367,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "1-2",
       teachers: ["доц. Котов И.С."],
       weeks: "Under",
+      kind: "Лекция",
     },
     {
       num: 4,
@@ -356,6 +377,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "1-10",
       teachers: ["доц. Котов И.С."],
       weeks: "Over",
+      kind: "Лекция",
     },
     {
       num: 4,
@@ -365,6 +387,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "2-22,3-16",
       teachers: ["ст.пр. Конша И.Г.", "пр.-ст. Днепровский А.Р."],
       weeks: "Under",
+      kind: "Практика",
     },
     {
       num: 5,
@@ -374,6 +397,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "1-21",
       teachers: ["ст.пр. Игнатьев А.М."],
       weeks: "Under",
+      kind: "",
     },
   ],
   // пятница
@@ -386,6 +410,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "2-11",
       teachers: ["ст.пр. Барабанова И.В."],
       weeks: "Both",
+      kind: "Лекция",
     },
     {
       num: 2,
@@ -395,6 +420,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "1-22",
       teachers: ["ст.пр. Чернявский М.Р."],
       weeks: "Both",
+      kind: "Лекция",
     },
     {
       num: 3,
@@ -404,6 +430,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "1-21",
       teachers: ["доц. Кузьменкова И.А."],
       weeks: "Over",
+      kind: "Практика",
     },
     {
       num: 3,
@@ -413,6 +440,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "3-36,3-24",
       teachers: ["ст.пр. Воруева В.И.", "ст.пр. Сон С.Б."],
       weeks: "Under",
+      kind: "Практика",
     },
     {
       num: 4,
@@ -422,6 +450,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "1-21",
       teachers: ["ст.пр. Чернявский М.Р."],
       weeks: "Over",
+      kind: "Практика",
     },
   ],
   // суббота (пары только под чертой)
@@ -434,6 +463,7 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "1-9",
       teachers: ["доц. Кузьменкова И.А."],
       weeks: "Under",
+      kind: "Лекция",
     },
     {
       num: 2,
@@ -443,31 +473,11 @@ const SCHEDULE: readonly (readonly Row[])[] = [
       rooms: "1-9",
       teachers: ["доц. Кузьменкова И.А."],
       weeks: "Under",
+      kind: "Практика",
     },
   ],
   // воскресенье
   [],
-];
-
-/// Тип занятия по предмету: «Лекция» / «Практика» / "" (без типа).
-/// Источник — скриншоты оригинального бота и структура официального стабильного
-/// расписания (две аудитории и два преподавателя = подгруппы = практика).
-const KIND: readonly (readonly [string, string])[] = [
-  ["Физическая культура", "Практика"],
-  ["Математический анализ", "Лекция"],
-  ["Экономическая теория", "Лекция"],
-  ["История и теория кооперативного движения", "Лекция"],
-  ["Компьютерные информационные технологии", "Практика"],
-  ["Информационный час", ""],
-  ["Основы алгоритмизации и программирования", "Практика"],
-  ["Иностранный язык", "Практика"],
-  ["Операционные системы", "Практика"],
-  ["Линейная алгебра и аналитическая геометрия", "Лекция"],
-  [
-    "Великая Отечественная война советского народа (в контексте Второй мировой войны)",
-    "Лекция",
-  ],
-  ["Современная политэкономия", "Лекция"],
 ];
 
 /// Расписание звонков: номер, начало, конец, 1-й час, 2-й час, перерыв после пары.
@@ -552,6 +562,7 @@ export function dumpSchedule(): object {
       rooms: r.rooms ?? "",
       teachers: r.teachers,
       weeks: weeksLabel(r.weeks),
+      kind: r.kind,
     })),
   );
   const subs = SUBSTITUTIONS.map((s) => ({
@@ -576,7 +587,6 @@ export function dumpSchedule(): object {
     anchor_monday: ANCHOR_MONDAY.fmtIso(),
     days,
     substitutions: subs,
-    kind: KIND.map(([name, k]) => [name, k]),
     bells,
   };
 }

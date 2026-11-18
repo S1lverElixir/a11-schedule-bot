@@ -243,21 +243,20 @@ def check_data():
 
     # считаем только стабильную таблицу: литералы замен в тестах не в счёт
     at = sched.find("const SCHEDULE")
-    table = sched[at:sched.find("/// Тип занятия по предмету", at)] if at >= 0 else ""
+    table = sched[at:sched.find("/// Расписание звонков", at)] if at >= 0 else ""
     pairs = len(re.findall(r"^\s+subj:", table, re.M))
     if pairs >= 25:
         ok(f"пар в данных: {pairs} записей с учётом вариантов над/под")
     else:
         fail(f"в workers/src/schedule.ts только {pairs} записей пар — таблица неполная")
 
-    subjects = set(re.findall(r'subj:\s*(?:\n\s*)?"((?:[^"\\]|\\.)+)"', table))
-    at = sched.find("const KIND")
-    kind_block = sched[at:sched.find("];", at)] if at >= 0 else ""
-    missing = sorted(s for s in subjects if f'"{s}"' not in kind_block)
-    if missing:
-        warn("KIND не покрывает предметы (тип занятия не выведется): " + "; ".join(missing)[:200])
+    # тип теперь задаётся на каждой паре (регистр предмета в a-1.xls),
+    # а не по предмету: у матана пн практика и вт лекция одновременно
+    kinds = re.findall(r'^\s+kind:\s*"((?:[^"\\]|\\.)*)",?\s*$', table, re.M)
+    if len(kinds) == pairs and all(k in ("Лекция", "Практика", "") for k in kinds):
+        ok(f"тип пары задан у всех {pairs} записей (лекция/практика/без типа)")
     else:
-        ok(f"KIND покрывает все {len(subjects)} предметов")
+        warn("тип пары есть не у всех записей таблицы — тип занятия не выведется")
 
     def const3(name):
         m = re.search(rf"{name}: Date = Date\.newConst\((\d+), (\d+), (\d+)\)", sched)
