@@ -131,11 +131,18 @@ test("типы занятий — из регистра предмета в та
   const monOver = dayPairs(Date.new(2026, 11, 23)!);
   assert.equal(monOver.find((p) => p.num === 3)!.kind, "Практика");
   assert.equal(monOver.find((p) => p.num === 4)!.kind, "");
-  // вт: матан капсом — лекция, ОАиП на 4-й паре лекция и на 5-й практика
+  // вт: ЭТ строчными — практика, матан капсом — лекция,
+  // ОАиП на 4-й паре лекция и на 5-й практика
   const tue = dayPairs(Date.new(2026, 11, 17)!);
+  assert.equal(tue.find((p) => p.num === 2)!.kind, "Практика");
   assert.equal(tue.find((p) => p.num === 3)!.kind, "Лекция");
   assert.equal(tue.find((p) => p.num === 4)!.kind, "Лекция");
   assert.equal(tue.find((p) => p.num === 5)!.kind, "Практика");
+  // пт 27.11.2026 (над): линал на 3-й паре строчными — практика,
+  // политэкономия на 4-й над чертой — практика
+  const friOver = dayPairs(Date.new(2026, 11, 27)!);
+  assert.equal(friOver.find((p) => p.num === 3)!.kind, "Практика");
+  assert.equal(friOver.find((p) => p.num === 4)!.kind, "Практика");
   // сб под-недели: 1-я пара линала лекция, 2-я практика
   const sat = dayPairs(Date.new(2026, 11, 21)!);
   assert.equal(sat.find((p) => p.num === 1)!.kind, "Лекция");
